@@ -11,7 +11,11 @@
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "start": "node dist/main.js",
     "dev": "tsc -p tsconfig.build.json --watch",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down -v",
+    "migrate": "node scripts/migrate.mjs",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",

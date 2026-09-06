@@ -15,6 +15,21 @@ npm run scan:secrets
 npm run build && npm start
 ```
 
+### Tests d'integration
+
+Ils tournent contre un vrai PostgreSQL jetable — sans volume, tout disparait a l'arret.
+
+```bash
+npm run db:up
+npm run migrate -- postgres://assurtrans:test-uniquement-jamais-en-production@localhost:55432/assurtrans_test
+DATABASE_URL_TEST=postgres://assurtrans:test-uniquement-jamais-en-production@localhost:55432/assurtrans_test npm run test:integration
+npm run db:down
+```
+
+Sans `DATABASE_URL_TEST`, la suite est **ignoree** plutot qu'en echec : un poste sans Docker ne
+doit pas voir rouge pour cette raison. Attention a ne pas confondre « 22 tests ignores » avec
+« 22 tests passes ».
+
 Sans configuration, le serveur refuse de demarrer et nomme la variable manquante :
 
 ```
@@ -257,9 +272,9 @@ Deux règles sont codées, l'une exigée par le cahier des charges, l'autre ajou
 
 Dans l'ordre où cela devrait être fait :
 
-1. **Tests d'integration sur une vraie base.** Les repositories sont testes contre une doublure
-   qui verifie la forme du SQL, pas son execution. Les contraintes des migrations ne sont donc
-   pas prouvees. C'est le trou de couverture le plus important aujourd'hui.
+1. **Executer les tests d'integration.** Ils sont ecrits (22 cas) mais n'ont jamais tourne : le
+   demon Docker n'a pas pu demarrer sur le poste de developpement. Tant qu'ils n'ont pas tourne,
+   les contraintes des migrations restent non prouvees.
 2. Envoi WhatsApp — **bloque** : identifiants WhatsApp Business et modele approuve par Meta.
 3. Worker d'envoi et reprise des envois en echec.
 4. `AuditLogger` branche sur `audit_events`.

@@ -1,0 +1,28 @@
+# Base de test jetable.
+#
+# Aucun volume : à l'arrêt du conteneur, tout disparaît. C'est voulu — une base de test qui
+# survit finit par accumuler un état que personne ne comprend, et les tests deviennent
+# dépendants de l'ordre dans lequel on les a lancés.
+#
+#   npm run db:up      démarre et attend que la base réponde
+#   npm run db:down    arrête et efface
+#
+# Port 55432 côté hôte pour ne pas entrer en conflit avec un PostgreSQL local.
+
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: assurtrans-pg-test
+    environment:
+      POSTGRES_USER: assurtrans
+      POSTGRES_PASSWORD: test-uniquement-jamais-en-production
+      POSTGRES_DB: assurtrans_test
+    ports:
+      - '55432:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U assurtrans -d assurtrans_test']
+      interval: 1s
+      timeout: 3s
+      retries: 30
