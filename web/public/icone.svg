@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Assur'Trans">
+  <rect width="512" height="512" rx="112" fill="#0F2620"/>
+  <!-- Le bon : un ticket avec sa perforation, reduit a l'essentiel. -->
+  <path d="M120 152h272a16 16 0 0 1 16 16v72a40 40 0 0 0 0 80v72a16 16 0 0 1-16 16H120a16 16 0 0 1-16-16v-72a40 40 0 0 0 0-80v-72a16 16 0 0 1 16-16Z" fill="#FFFFFF"/>
+  <path d="M256 168v40M256 232v40M256 296v40M256 360v-8" stroke="#0F2620" stroke-width="10" stroke-linecap="round" stroke-dasharray="14 16"/>
+  <text x="180" y="290" font-family="Archivo, system-ui, sans-serif" font-size="86" font-weight="700" fill="#0B6F43" text-anchor="middle">A</text>
+  <text x="336" y="290" font-family="Archivo, system-ui, sans-serif" font-size="86" font-weight="700" fill="#0B6F43" text-anchor="middle">T</text>
+</svg>

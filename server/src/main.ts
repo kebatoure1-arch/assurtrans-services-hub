@@ -10,10 +10,17 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { AuthenticateByPhone } from './application/authenticate-by-phone.ts';
 import { EmitVoucherOnPayment } from './application/emit-voucher-on-payment.ts';
 import { RedeemVoucherAtStation } from './application/redeem-voucher-at-station.ts';
 import { loadConfig } from './config.ts';
 import { PgAccessTokenVerifier } from './infra/auth/api-tokens.ts';
+import {
+  PgAnnuaireComptes,
+  PgApiTokenIssuer,
+  PgOtpChallengeRepository,
+} from './infra/db/pg-auth.ts';
+import { LogOtpSender } from './infra/auth/otp-senders.ts';
 import { PgDatabase } from './infra/db/pg-pool.ts';
 import {
   PgCheckoutSessionRepository,
@@ -98,6 +105,19 @@ async function main(): Promise<void> {
     cles: uuid,
     horloge: () => new Date().toISOString(),
     montantBon: config.montantBon,
+    signer,
+    originesAutorisees: config.originesAutorisees,
+    auth: new AuthenticateByPhone({
+      challenges: new PgOtpChallengeRepository(db),
+      // ⛔ Passerelle SMS non branchee : le code part au journal serveur, pas au telephone.
+      //    Remplacer par l'adaptateur SMS ou WhatsApp des que les identifiants sont obtenus.
+      sender: new LogOtpSender(),
+      annuaire: new PgAnnuaireComptes(db),
+      jetons: new PgApiTokenIssuer(db),
+      ids: uuid,
+      otp: config.otp,
+      sessionDureeHeures: config.sessionDureeHeures,
+    }),
   });
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
@@ -109,6 +129,9 @@ async function main(): Promise<void> {
       canalReglement: config.canalParDefaut,
       canalEncaissement: config.canalEncaissement,
       webhooksArmes: config.webhook.signatureHeader !== '',
+      envoiCodeParSms: false,
+      echoCodeActif: config.otp.echoCode,
+      originesAutorisees: config.originesAutorisees,
       lectureEvenementsArmee: config.checkout.eventType !== '',
     }),
   );

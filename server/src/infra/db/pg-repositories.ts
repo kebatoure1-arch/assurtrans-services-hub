@@ -128,6 +128,15 @@ export class PgVoucherRepository implements VoucherRepository {
     return r.rowCount > 0;
   }
 
+  async listerParChauffeur(driverId: string, limite: number): Promise<readonly FuelVoucher[]> {
+    const r = await this.db.query(
+      `SELECT ${COLONNES_BON} FROM fuel_vouchers
+        WHERE driver_id = $1 ORDER BY emis_a DESC LIMIT $2`,
+      [driverId, limite],
+    );
+    return r.rows.map(versBon);
+  }
+
   /**
    * Écriture conditionnelle. Zéro ligne affectée signifie que le statut a changé entre la
    * lecture et l'écriture — un autre pompiste, une annulation, une expiration balayée.

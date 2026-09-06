@@ -45,12 +45,23 @@ export class VoucherError extends Error {
 }
 
 export class AlreadyRedeemedError extends VoucherError {
+  readonly voucherId: string;
+  readonly consommeA: string | null;
+  readonly stationId: string | null;
+  readonly operateurId: string | null;
+
   constructor(bon: FuelVoucher) {
     super(
       `bon ${bon.id} déjà consommé le ${bon.consommeA} à la station ${bon.stationId} ` +
         `par l'opérateur ${bon.operateurId}`,
       'AlreadyRedeemedError',
     );
+    // Les donnees sont portees par l'erreur : personne n'a a relire le message pour les
+    // retrouver. Le message reste, mais pour les journaux.
+    this.voucherId = bon.id;
+    this.consommeA = bon.consommeA;
+    this.stationId = bon.stationId;
+    this.operateurId = bon.operateurId;
   }
 }
 

@@ -38,6 +38,8 @@ export interface VoucherRepository {
    * dit si quelqu'un d'autre est passé avant.
    */
   saveIfStatut(bon: FuelVoucher, statutAttendu: VoucherStatut): Promise<boolean>;
+  /** Bons d'un chauffeur, du plus recent au plus ancien. */
+  listerParChauffeur(driverId: string, limite: number): Promise<readonly FuelVoucher[]>;
 }
 
 export interface Driver {

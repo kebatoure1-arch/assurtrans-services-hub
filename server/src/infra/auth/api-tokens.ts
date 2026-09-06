@@ -42,7 +42,9 @@ export class PgAccessTokenVerifier implements AccessTokenVerifier {
     const r = await this.db.query(
       `UPDATE api_tokens
           SET dernier_usage = now()
-        WHERE token_hash = $1 AND revoque_a IS NULL
+        WHERE token_hash = $1
+          AND revoque_a IS NULL
+          AND (expire_a IS NULL OR expire_a > now())
       RETURNING subject, role, station_id`,
       [empreinte(token)],
     );

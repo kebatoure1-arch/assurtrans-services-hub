@@ -14,6 +14,10 @@ const ENV_MINIMAL = {
   MONTANT_BON_MAX_XOF: '200000',
   WEBHOOK_TOLERANCE_SECONDES: '300',
   PORT: '3000',
+  OTP_DUREE_SECONDES: '300',
+  OTP_MAX_TENTATIVES: '5',
+  OTP_MAX_DEMANDES_PAR_HEURE: '3',
+  SESSION_DUREE_HEURES: '12',
 };
 
 describe('loadConfig — échouer au démarrage, pas au premier paiement', () => {
@@ -82,6 +86,23 @@ describe('loadConfig — échouer au démarrage, pas au premier paiement', () =>
     const { PLAFOND_UNITAIRE_XOF, ...sansPlafond } = ENV_MINIMAL;
     void PLAFOND_UNITAIRE_XOF;
     await expect(loadConfig(secrets, sansPlafond)).rejects.toThrow(/PLAFOND_UNITAIRE_XOF/);
+  });
+
+  it('l’echo du code OTP est faux tant qu’on ne l’active pas explicitement', async () => {
+    const c = await loadConfig(secrets, ENV_MINIMAL);
+    expect(c.otp.echoCode).toBe(false);
+    const active = await loadConfig(secrets, { ...ENV_MINIMAL, OTP_ECHO: 'true' });
+    expect(active.otp.echoCode).toBe(true);
+  });
+
+  it('aucune origine autorisée par défaut', async () => {
+    const c = await loadConfig(secrets, ENV_MINIMAL);
+    expect(c.originesAutorisees).toEqual([]);
+    const avec = await loadConfig(secrets, {
+      ...ENV_MINIMAL,
+      ORIGINES_AUTORISEES: 'http://localhost:5174, https://app.assurtrans.sn',
+    });
+    expect(avec.originesAutorisees).toEqual(['http://localhost:5174', 'https://app.assurtrans.sn']);
   });
 
   it('refuse des bornes de bon incohérentes', async () => {

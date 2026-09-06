@@ -60,6 +60,9 @@ class BonsEnMemoire implements VoucherRepository {
     this.lignes.set(bon.id, bon);
     return true;
   }
+  async listerParChauffeur(driverId: string, limite: number) {
+    return [...this.lignes.values()].filter((b) => b.driverId === driverId).slice(0, limite);
+  }
 }
 
 class ChauffeursEnMemoire implements DriverRepository {

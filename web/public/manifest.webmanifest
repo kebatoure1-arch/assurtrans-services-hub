@@ -1,0 +1,19 @@
+{
+  "name": "Assur'Trans — bon carburant",
+  "short_name": "Assur'Trans",
+  "description": "Payez votre carburant, recevez un bon a presenter en station.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E9ECEA",
+  "theme_color": "#0F2620",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/icone.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -14,6 +14,14 @@ import type { AccessTokenVerifier, Principal } from '../src/infra/auth/api-token
 import { EmitVoucherOnPayment } from '../src/application/emit-voucher-on-payment.ts';
 import { RedeemVoucherAtStation } from '../src/application/redeem-voucher-at-station.ts';
 import { CheckoutCompletedMapper } from '../src/http/checkout-mapper.ts';
+import { AuthenticateByPhone } from '../src/application/authenticate-by-phone.ts';
+import type { OtpChallenge } from '../src/domain/otp.ts';
+import type {
+  AnnuaireComptes,
+  ApiTokenIssuer,
+  OtpChallengeRepository,
+  OtpSender,
+} from '../src/ports/authentication.ts';
 import { buildServer } from '../src/http/server.ts';
 import { DryRunCollectionChannel } from '../src/infra/wave/dry-run-collection-channel.ts';
 import type {
@@ -65,6 +73,12 @@ class Bons implements VoucherRepository {
     this.lignes.set(bon.id, bon);
     return true;
   }
+  async listerParChauffeur(driverId: string, limite: number) {
+    return [...this.lignes.values()]
+      .filter((b) => b.driverId === driverId)
+      .sort((a, b) => b.emisA.localeCompare(a.emisA))
+      .slice(0, limite);
+  }
 }
 
 class Sessions implements CheckoutSessionRepository {
@@ -100,6 +114,49 @@ class Jetons implements AccessTokenVerifier {
   constructor(private readonly table: Record<string, Principal>) {}
   async verify(token: string) {
     return this.table[token] ?? null;
+  }
+}
+
+class ChallengesTest implements OtpChallengeRepository {
+  readonly tous: OtpChallenge[] = [];
+  async trouverVivant(msisdn: string) {
+    return this.tous.find((c) => c.msisdn === msisdn && !c.consomme) ?? null;
+  }
+  async remplacer(c: OtpChallenge) {
+    this.tous.forEach((x, i) => {
+      if (x.msisdn === c.msisdn && !x.consomme) this.tous[i] = { ...x, consomme: true };
+    });
+    this.tous.push(c);
+  }
+  async majTentative(c: OtpChallenge) {
+    const i = this.tous.findIndex((x) => x.id === c.id);
+    if (i >= 0) this.tous[i] = c;
+  }
+  async compterDepuis(msisdn: string, depuis: string) {
+    return this.tous.filter((c) => c.msisdn === msisdn && c.emisA >= depuis).length;
+  }
+}
+
+class SenderTest implements OtpSender {
+  readonly envoyes: { msisdn: string; code: string }[] = [];
+  async envoyer(msisdn: string, code: string) {
+    this.envoyes.push({ msisdn, code });
+    return true;
+  }
+}
+
+const ANNUAIRE_TEST: AnnuaireComptes = {
+  async resoudre(msisdn) {
+    if (msisdn === '+221770000001') {
+      return { subject: 'chauffeur-7', role: 'DRIVER', stationId: null };
+    }
+    return null;
+  },
+};
+
+class EmetteurTest implements ApiTokenIssuer {
+  async emettre() {
+    return 'jeton-de-session';
   }
 }
 
@@ -144,6 +201,8 @@ let paiements: Paiements;
 let bons: Bons;
 let sessions: Sessions;
 let file: File;
+let challenges: ChallengesTest;
+let sender: SenderTest;
 let app: FastifyInstance;
 
 function signerWebhook(corps: string, unix = Math.floor(Date.parse(MAINTENANT) / 1000)): string {
@@ -156,6 +215,8 @@ beforeEach(() => {
   bons = new Bons();
   sessions = new Sessions();
   file = new File();
+  challenges = new ChallengesTest();
+  sender = new SenderTest();
 
   app = buildServer({
     encaissement: new DryRunCollectionChannel(async () => {
@@ -189,6 +250,17 @@ beforeEach(() => {
     cles: compteur('KEY'),
     horloge: () => MAINTENANT,
     montantBon: { minXof: xof(1_000), maxXof: xof(200_000) },
+    signer,
+    originesAutorisees: [],
+    auth: new AuthenticateByPhone({
+      challenges,
+      sender,
+      annuaire: ANNUAIRE_TEST,
+      jetons: new EmetteurTest(),
+      ids: compteur('CHAL'),
+      otp: { dureeSecondes: 300, maxTentatives: 5, maxDemandesParHeure: 3, echoCode: false },
+      sessionDureeHeures: 12,
+    }),
   });
 });
 

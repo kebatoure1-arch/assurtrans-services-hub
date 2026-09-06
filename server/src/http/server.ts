@@ -14,6 +14,7 @@
  */
 
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import cors from '@fastify/cors';
 import { z } from 'zod';
 import { type XOF, xof } from '../domain/money.ts';
 import {
@@ -42,6 +43,13 @@ import type {
   VoucherRepository,
 } from '../ports/repositories.ts';
 import type { CheckoutCompletedMapper } from './checkout-mapper.ts';
+import {
+  AuthenticateByPhone,
+  AuthentificationRefuseeError,
+  TropDeDemandesError,
+} from '../application/authenticate-by-phone.ts';
+import { MsisdnInvalideError } from '../domain/otp.ts';
+import type { VoucherSigner } from '../infra/security/voucher-signature.ts';
 
 export interface ServerDeps {
   readonly encaissement: CollectionChannel;
@@ -57,6 +65,10 @@ export interface ServerDeps {
   readonly cles: IdGenerator;
   readonly horloge: () => string;
   readonly montantBon: { readonly minXof: XOF; readonly maxXof: XOF };
+  readonly auth: AuthenticateByPhone;
+  readonly signer: VoucherSigner;
+  /** Origines autorisees pour le front. Vide = aucune requete inter-origine acceptee. */
+  readonly originesAutorisees: readonly string[];
 }
 
 declare module 'fastify' {
@@ -70,6 +82,15 @@ const CorpsSession = z.object({
   montantXof: z.number().int().positive(),
 });
 
+const CorpsDemandeCode = z.object({
+  telephone: z.string().min(6).max(24),
+});
+
+const CorpsSession2 = z.object({
+  telephone: z.string().min(6).max(24),
+  code: z.string().regex(/^\d{6}$/),
+});
+
 const CorpsConsommation = z.object({
   token: z.string().min(1).max(4096),
   redemptionId: z.string().min(1).max(128),
@@ -79,8 +100,34 @@ function erreur(reply: FastifyReply, code: number, message: string): FastifyRepl
   return reply.code(code).send({ erreur: message });
 }
 
+/**
+ * Refus de consommation, sous forme exploitable par une interface.
+ *
+ * Le message technique reste dans les journaux. Ce que recoit le pompiste est un code et les
+ * quelques donnees dont il a besoin — a son ecran de les formuler dans sa langue. Lui afficher
+ * un identifiant de bon et un horodatage ISO serait lui faire lire nos entrailles.
+ */
+function refus(
+  reply: FastifyReply,
+  statut: number,
+  code: string,
+  details: Record<string, unknown> = {},
+): FastifyReply {
+  return reply.code(statut).send({ erreur: code, code, ...details });
+}
+
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const app = Fastify({ logger: false, bodyLimit: 256 * 1024 });
+
+  // Le front est servi depuis une autre origine. La liste est explicite : pas de joker.
+  if (deps.originesAutorisees.length > 0) {
+    void app.register(cors, {
+      origin: deps.originesAutorisees as string[],
+      methods: ['GET', 'POST'],
+      allowedHeaders: ['content-type', 'authorization'],
+      maxAge: 600,
+    });
+  }
 
   // Le corps brut est conservé pour la vérification de signature des webhooks.
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, corps, done) => {
@@ -121,6 +168,57 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   }
 
   app.get('/health', async () => ({ statut: 'ok' }));
+
+  // ------------------------------------------------------------- authentification
+
+  app.post('/api/auth/code', async (req, reply) => {
+    const corps = CorpsDemandeCode.safeParse(req.body);
+    if (!corps.success) return erreur(reply, 400, 'numero de telephone attendu');
+
+    try {
+      const r = await deps.auth.demanderCode(corps.data.telephone, deps.horloge());
+      return reply.code(202).send(r);
+    } catch (cause) {
+      if (cause instanceof MsisdnInvalideError) {
+        return erreur(reply, 400, 'numero de telephone invalide');
+      }
+      if (cause instanceof TropDeDemandesError) {
+        return reply
+          .code(429)
+          .header('Retry-After', String(cause.reessayerDansSecondes))
+          .send({ erreur: 'trop de demandes, reessayez plus tard' });
+      }
+      throw cause;
+    }
+  });
+
+  app.post('/api/auth/session', async (req, reply) => {
+    const corps = CorpsSession2.safeParse(req.body);
+    if (!corps.success) return erreur(reply, 400, 'numero et code a six chiffres attendus');
+
+    try {
+      const session = await deps.auth.ouvrirSession(
+        corps.data.telephone,
+        corps.data.code,
+        deps.horloge(),
+      );
+      return reply.code(200).send(session);
+    } catch (cause) {
+      if (cause instanceof MsisdnInvalideError) {
+        return erreur(reply, 400, 'numero de telephone invalide');
+      }
+      if (cause instanceof AuthentificationRefuseeError) {
+        return erreur(reply, 401, cause.message);
+      }
+      throw cause;
+    }
+  });
+
+  app.get('/api/moi', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['DRIVER', 'ADMIN', 'STATION_OPERATOR']);
+    if (principal === null) return reply;
+    return reply.send(principal);
+  });
 
   // ------------------------------------------------------------- encaissement
 
@@ -273,30 +371,58 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       });
     } catch (cause) {
       if (cause instanceof SignatureError) {
-        return erreur(reply, 400, 'QR illisible ou non authentique');
+        return refus(reply, 400, 'QR_ILLISIBLE');
       }
       if (cause instanceof VoucherIntrouvableError) {
-        return erreur(reply, 404, 'bon inconnu');
+        return refus(reply, 404, 'BON_INCONNU');
       }
       if (cause instanceof AlreadyRedeemedError) {
-        return erreur(reply, 409, cause.message);
+        return refus(reply, 409, 'DEJA_SERVI', {
+          consommeA: cause.consommeA,
+          memeStation: cause.stationId === principal.stationId,
+        });
       }
       if (cause instanceof VoucherExpiredError) {
-        return erreur(reply, 410, 'bon expiré');
+        return refus(reply, 410, 'BON_EXPIRE');
       }
       if (cause instanceof VoucherCancelledError) {
-        return erreur(reply, 409, 'bon annulé');
+        return refus(reply, 409, 'BON_ANNULE');
       }
       if (cause instanceof MontantIncoherentError) {
         // Le QR est signé mais ment sur le montant : incident de sécurité, pas erreur de saisie.
         req.log.error({ err: cause.message }, 'montant du QR divergent de la base');
-        return erreur(reply, 409, 'bon non conforme, ne pas servir');
+        return refus(reply, 409, 'BON_NON_CONFORME');
       }
       throw cause;
     }
   });
 
   // ------------------------------------------------------------- consultation
+
+  app.get('/api/bons', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['DRIVER']);
+    if (principal === null) return reply;
+
+    const bons = await deps.bons.listerParChauffeur(principal.subject, 20);
+    const maintenant = deps.horloge();
+
+    return reply.send(
+      bons.map((b) => ({
+        id: b.id,
+        montantXof: b.montant,
+        statut: b.statut,
+        emisA: b.emisA,
+        expireA: b.expireA,
+        consommeA: b.consommeA,
+        // Le jeton n'accompagne que les bons encore utilisables : inutile de faire circuler
+        // de quoi afficher un QR qui ne servira plus.
+        jeton:
+          b.statut === 'EMIS' && b.expireA > maintenant
+            ? deps.signer.sign({ id: b.id, montant: b.montant, expireA: b.expireA })
+            : null,
+      })),
+    );
+  });
 
   app.get<{ Params: { id: string } }>('/api/bons/:id', async (req, reply) => {
     const principal = await exigerRole(req, reply, ['DRIVER', 'ADMIN', 'STATION_OPERATOR']);

@@ -35,6 +35,14 @@ import {
 import { DryRunCollectionChannel } from '../infra/wave/dry-run-collection-channel.ts';
 import type { AccessTokenVerifier, Principal } from '../infra/auth/api-tokens.ts';
 import { CheckoutCompletedMapper } from '../http/checkout-mapper.ts';
+import { AuthenticateByPhone } from '../application/authenticate-by-phone.ts';
+import type {
+  AnnuaireComptes,
+  ApiTokenIssuer,
+  OtpChallengeRepository,
+  OtpSender,
+} from '../ports/authentication.ts';
+import type { OtpChallenge } from '../domain/otp.ts';
 import { buildServer } from '../http/server.ts';
 import type {
   CheckoutSession,
@@ -102,6 +110,12 @@ class Bons implements VoucherRepository {
     this.lignes.set(bon.id, bon);
     return true;
   }
+  async listerParChauffeur(driverId: string, limite: number) {
+    return [...this.lignes.values()]
+      .filter((b) => b.driverId === driverId)
+      .sort((a, b) => b.emisA.localeCompare(a.emisA))
+      .slice(0, limite);
+  }
 }
 
 class Sessions implements CheckoutSessionRepository {
@@ -142,9 +156,67 @@ class Jetons implements AccessTokenVerifier {
     },
   };
   async verify(token: string) {
-    return this.table[token] ?? null;
+    return this.table[token] ?? jetonsEmis.get(token) ?? null;
   }
 }
+
+class ChallengesDemo implements OtpChallengeRepository {
+  readonly tous: OtpChallenge[] = [];
+  async trouverVivant(msisdn: string) {
+    return this.tous.find((c) => c.msisdn === msisdn && !c.consomme) ?? null;
+  }
+  async remplacer(c: OtpChallenge) {
+    this.tous.forEach((x, i) => {
+      if (x.msisdn === c.msisdn && !x.consomme) this.tous[i] = { ...x, consomme: true };
+    });
+    this.tous.push(c);
+  }
+  async majTentative(c: OtpChallenge) {
+    const i = this.tous.findIndex((x) => x.id === c.id);
+    if (i >= 0) this.tous[i] = c;
+  }
+  async compterDepuis(msisdn: string, depuis: string) {
+    return this.tous.filter((c) => c.msisdn === msisdn && c.emisA >= depuis).length;
+  }
+}
+
+const jetonsEmis = new Map<string, Principal>();
+
+const annuaireDemo: AnnuaireComptes = {
+  async resoudre(msisdn) {
+    if (msisdn === CHAUFFEUR.msisdn) {
+      return { subject: CHAUFFEUR.id, role: 'DRIVER', stationId: null };
+    }
+    if (msisdn === '+221770000002') {
+      return { subject: 'pompiste-demo', role: 'STATION_OPERATOR', stationId: 'station-demo' };
+    }
+    return null;
+  },
+};
+
+const emetteurDemo: ApiTokenIssuer = {
+  async emettre(input) {
+    const jeton = `session-${randomUUID()}`;
+    jetonsEmis.set(jeton, {
+      subject: input.subject,
+      role: input.role,
+      stationId: input.stationId,
+    });
+    return jeton;
+  },
+};
+
+/** L'envoi passe par le journal du serveur : la page de demonstration affiche le code. */
+class SenderDemo implements OtpSender {
+  dernier: { msisdn: string; code: string } | null = null;
+  async envoyer(msisdn: string, code: string) {
+    this.dernier = { msisdn, code };
+    return true;
+  }
+}
+
+const senderDemo = new SenderDemo();
+const challengesDemo = new ChallengesDemo();
 
 // ------------------------------------------------------------------ montage
 
@@ -186,6 +258,17 @@ const app = buildServer({
   cles: uuid,
   horloge: () => new Date().toISOString(),
   montantBon: { minXof: xof(1_000), maxXof: xof(200_000) },
+  signer,
+  originesAutorisees: ['http://localhost:5174', 'http://127.0.0.1:5174'],
+  auth: new AuthenticateByPhone({
+    challenges: challengesDemo,
+    sender: senderDemo,
+    annuaire: annuaireDemo,
+    jetons: emetteurDemo,
+    ids: uuid,
+    otp: { dureeSecondes: 300, maxTentatives: 5, maxDemandesParHeure: 20, echoCode: true },
+    sessionDureeHeures: 12,
+  }),
 });
 
 // ------------------------------------------------- routes de démonstration

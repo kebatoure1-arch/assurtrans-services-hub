@@ -44,6 +44,15 @@ export interface AppConfig {
     readonly montantPath: string;
   };
   readonly port: number;
+  readonly otp: {
+    readonly dureeSecondes: number;
+    readonly maxTentatives: number;
+    readonly maxDemandesParHeure: number;
+    readonly echoCode: boolean;
+  };
+  readonly sessionDureeHeures: number;
+  /** Origines autorisees pour le front. Liste explicite, pas de joker. */
+  readonly originesAutorisees: readonly string[];
 }
 
 function requis(env: Record<string, string | undefined>, nom: string): string {
@@ -147,6 +156,18 @@ export async function loadConfig(
       montantPath: env.CHECKOUT_AMOUNT_PATH?.trim() ?? '',
     },
     port: entierRequis(env, 'PORT'),
+    otp: {
+      dureeSecondes: entierRequis(env, 'OTP_DUREE_SECONDES'),
+      maxTentatives: entierRequis(env, 'OTP_MAX_TENTATIVES'),
+      maxDemandesParHeure: entierRequis(env, 'OTP_MAX_DEMANDES_PAR_HEURE'),
+      // Renvoie le code dans la reponse HTTP. Vrai uniquement en demonstration.
+      echoCode: env.OTP_ECHO === 'true',
+    },
+    sessionDureeHeures: entierRequis(env, 'SESSION_DUREE_HEURES'),
+    originesAutorisees: (env.ORIGINES_AUTORISEES ?? '')
+      .split(',')
+      .map((o) => o.trim())
+      .filter((o) => o.length > 0),
     validiteBonHeures: entierRequis(env, 'VALIDITE_BON_HEURES'),
     wave: {
       baseUrl: env.WAVE_BASE_URL?.trim() || 'https://api.wave.com',

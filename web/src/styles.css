@@ -1,0 +1,601 @@
+/*
+ * Assur'Trans — système visuel.
+ *
+ * Contexte d'usage, qui explique à peu près toutes les décisions ci-dessous : un téléphone
+ * Android d'entrée de gamme, tenu à une main, dehors, souvent en plein soleil, par quelqu'un
+ * au travail et pressé. Ce n'est pas un tableau de bord qu'on consulte assis.
+ *
+ * D'où :
+ *   - des surfaces tactiles jamais sous 56 px ;
+ *   - des contrastes très au-dessus du minimum réglementaire ;
+ *   - le verdict du pompiste en pleine page, lisible à un mètre, pas dans une notification ;
+ *   - le bon du chauffeur traité comme un ticket, avec sa perforation — l'objet papier qu'il
+ *     remplace, et que tout le monde reconnaît sans explication.
+ */
+
+@import '@fontsource-variable/archivo';
+@import '@fontsource-variable/public-sans';
+
+:root {
+  /* Béton et pétrole. Le vert vient du logo, assombri pour tenir en extérieur. */
+  --encre: #0f2620;
+  --encre-douce: #4a5f58;
+  --beton: #e9ecea;
+  --craie: #ffffff;
+  --trait: #cfd8d4;
+
+  /* Sémantique feu tricolore. L'écran du pompiste est un feu : autant l'assumer. */
+  --vert: #0b6f43;
+  --vert-clair: #e2f0e8;
+  --brique: #a8331f;
+  --brique-clair: #fae9e5;
+  --ambre: #96650a;
+  --ambre-clair: #fdf1d8;
+
+  --rayon: 14px;
+  --marge: clamp(16px, 5vw, 28px);
+
+  --display: 'Archivo Variable', ui-sans-serif, system-ui, sans-serif;
+  --texte: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--beton);
+  color: var(--encre);
+  font-family: var(--texte);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  /* Sur un téléphone tenu à une main, le rebond de défilement gêne plus qu'il n'aide. */
+  overscroll-behavior-y: none;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+/* Le focus reste visible partout : on ne le retire jamais, on le dessine mieux. */
+:focus-visible {
+  outline: 3px solid var(--encre);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------- structure */
+
+.app {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--beton);
+}
+
+.barre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px var(--marge);
+  background: var(--encre);
+  color: var(--craie);
+}
+
+.barre .marque {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.barre .qui {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.barre button {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: var(--craie);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.vue {
+  flex: 1;
+  padding: var(--marge);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ---------------------------------------------------------------- typographie */
+
+.titre {
+  font-size: clamp(26px, 7vw, 34px);
+  line-height: 1.05;
+}
+
+.chapo {
+  color: var(--encre-douce);
+  font-size: 15px;
+  margin: 6px 0 0;
+}
+
+.etiquette {
+  font-family: var(--display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--encre-douce);
+}
+
+/*
+ * Les montants sont le contenu le plus important de l'application.
+ * Archivo à sa largeur maximale, chiffres tabulaires : les montants s'alignent d'une ligne à
+ * l'autre et la virgule des milliers ne fait pas danser le texte.
+ */
+.montant {
+  font-family: var(--display);
+  font-variation-settings: 'wdth' 112;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+}
+
+/* ---------------------------------------------------------------- contrôles */
+
+.champ {
+  display: block;
+}
+
+.champ .etiquette {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.champ input {
+  width: 100%;
+  min-height: 58px;
+  padding: 0 16px;
+  background: var(--craie);
+  border: 1.5px solid var(--trait);
+  border-radius: var(--rayon);
+  font-size: 19px;
+}
+
+.champ input:focus {
+  border-color: var(--encre);
+}
+
+.champ .aide {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--encre-douce);
+}
+
+.bouton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 58px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--rayon);
+  background: var(--encre);
+  color: var(--craie);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 17px;
+  cursor: pointer;
+}
+
+.bouton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bouton.secondaire {
+  background: transparent;
+  color: var(--encre);
+  border: 1.5px solid var(--trait);
+}
+
+.bouton.discret {
+  min-height: 44px;
+  background: transparent;
+  color: var(--encre-douce);
+  font-family: var(--texte);
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.montants-rapides {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.montants-rapides button {
+  min-height: 56px;
+  border: 1.5px solid var(--trait);
+  border-radius: var(--rayon);
+  background: var(--craie);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.montants-rapides button[aria-pressed='true'] {
+  border-color: var(--encre);
+  background: var(--encre);
+  color: var(--craie);
+}
+
+/* ---------------------------------------------------------------- messages */
+
+.message {
+  padding: 14px 16px;
+  border-radius: var(--rayon);
+  font-size: 15px;
+}
+
+.message.erreur {
+  background: var(--brique-clair);
+  color: var(--brique);
+}
+
+.message.info {
+  background: var(--ambre-clair);
+  color: var(--ambre);
+}
+
+/* ---------------------------------------------------------------- le ticket */
+
+/*
+ * Le bon est dessiné comme le ticket papier qu'il remplace : un talon en haut avec le montant,
+ * une perforation, le QR en dessous. La perforation est faite de deux encoches en dégradé
+ * radial et d'un pointillé — pas d'image, rien à charger.
+ */
+.ticket {
+  position: relative;
+  background: var(--craie);
+  border-radius: var(--rayon);
+  overflow: hidden;
+  box-shadow: 0 1px 0 var(--trait), 0 12px 28px -18px rgba(15, 38, 32, 0.55);
+}
+
+.ticket .talon {
+  padding: 22px var(--marge) 20px;
+}
+
+.ticket .talon .montant {
+  font-size: clamp(46px, 15vw, 66px);
+}
+
+.ticket .talon .devise {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: 0.08em;
+  color: var(--encre-douce);
+  margin-left: 8px;
+}
+
+.ticket .perforation {
+  position: relative;
+  height: 26px;
+}
+
+.ticket .perforation::before,
+.ticket .perforation::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--beton);
+  transform: translateY(-50%);
+}
+
+.ticket .perforation::before {
+  left: -13px;
+}
+
+.ticket .perforation::after {
+  right: -13px;
+}
+
+.ticket .perforation .pointille {
+  position: absolute;
+  top: 50%;
+  left: 18px;
+  right: 18px;
+  border-top: 2px dashed var(--trait);
+}
+
+.ticket .corps {
+  padding: 4px var(--marge) 24px;
+  text-align: center;
+}
+
+.ticket .corps img {
+  width: min(272px, 74vw);
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  /* Le QR reste lisible même si la carte prend une teinte : blanc franc, bords nets. */
+  background: #fff;
+  padding: 10px;
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+
+.ticket .corps .peremption {
+  margin: 16px 0 0;
+  font-size: 14px;
+  color: var(--encre-douce);
+}
+
+.ticket.perime,
+.ticket.consomme {
+  opacity: 0.62;
+}
+
+.bandeau-statut {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-family: var(--display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bandeau-statut.actif {
+  background: var(--vert-clair);
+  color: var(--vert);
+}
+
+.bandeau-statut.consomme {
+  background: var(--beton);
+  color: var(--encre-douce);
+}
+
+.bandeau-statut.annule {
+  background: var(--brique-clair);
+  color: var(--brique);
+}
+
+/* ---------------------------------------------------------------- historique */
+
+.liste-bons {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--trait);
+  border-radius: var(--rayon);
+  overflow: hidden;
+}
+
+.liste-bons li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px var(--marge);
+  background: var(--craie);
+}
+
+.liste-bons .somme {
+  font-family: var(--display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+}
+
+.liste-bons .quand {
+  font-size: 13px;
+  color: var(--encre-douce);
+}
+
+/* ---------------------------------------------------------------- le verdict */
+
+/*
+ * Le verdict occupe tout l'écran. Ce n'est pas un effet de style : le pompiste lit la réponse
+ * à bout de bras, souvent en plein soleil, en tenant le pistolet de l'autre main. Une bannière
+ * discrète qui s'efface après trois secondes serait une faute.
+ */
+.verdict {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: var(--marge);
+  color: var(--craie);
+  text-align: center;
+  animation: monter 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.verdict.servir {
+  background: var(--vert);
+}
+
+.verdict.refus {
+  background: var(--brique);
+}
+
+.verdict.deja {
+  background: var(--ambre);
+}
+
+.verdict .mot {
+  font-family: var(--display);
+  font-variation-settings: 'wdth' 112;
+  font-weight: 700;
+  font-size: clamp(38px, 13vw, 62px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+
+/* Le montant et sa devise forment une seule phrase : ils se lisent d'un bloc. */
+.verdict .ligne-somme {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12px;
+  margin: 2px 0 0;
+}
+
+.verdict .somme {
+  font-size: clamp(58px, 21vw, 104px);
+}
+
+.verdict .unite {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: clamp(18px, 5vw, 24px);
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+}
+
+.verdict .motif {
+  font-size: 16px;
+  line-height: 1.4;
+  opacity: 0.92;
+  max-width: 30ch;
+  margin: 6px auto 0;
+}
+
+.verdict .sortie {
+  margin-top: 32px;
+  align-self: center;
+  min-width: 220px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  color: var(--craie);
+}
+
+@keyframes monter {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- scanner */
+
+.viseur {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--rayon);
+  overflow: hidden;
+  background: var(--encre);
+}
+
+.viseur video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.viseur .cadre {
+  position: absolute;
+  inset: 14%;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  border-radius: 10px;
+  box-shadow: 0 0 0 100vmax rgba(15, 38, 32, 0.42);
+}
+
+.viseur .indication {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  text-align: center;
+  color: var(--craie);
+  font-size: 14px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------------------------------------------------------------- divers */
+
+.pile {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vide {
+  padding: 28px var(--marge);
+  background: var(--craie);
+  border-radius: var(--rayon);
+  text-align: center;
+  color: var(--encre-douce);
+}
+
+.pied {
+  padding: 18px var(--marge) 28px;
+  font-size: 12px;
+  color: var(--encre-douce);
+  text-align: center;
+}
+
+.chargement {
+  padding: 40px;
+  text-align: center;
+  color: var(--encre-douce);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

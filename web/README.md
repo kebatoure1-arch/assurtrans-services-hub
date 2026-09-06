@@ -1,0 +1,60 @@
+# Front Assur'Trans
+
+Interface du bon carburant. **Aucune dependance a Devv** : ni SDK, ni authentification tierce,
+ni tables distantes. Le front ne parle qu'a l'API `server/`.
+
+```bash
+npm install
+npm run dev      # http://localhost:5174
+npm run build
+```
+
+L'adresse de l'API se regle par `ASSURTRANS_API` (defaut `http://localhost:3001`). C'est la
+seule variable, et c'est une information publique : aucun secret n'entre dans le bundle.
+
+## Trois ecrans, un par situation
+
+| Ecran | Qui | La seule question a laquelle il repond |
+|---|---|---|
+| Connexion | tout le monde | quel est votre numero ? |
+| Chauffeur | `DRIVER` | ai-je un bon a presenter ? |
+| Pompiste | `STATION_OPERATOR` | est-ce que je sers, et combien ? |
+
+Pas de menu, pas d'onglets : le role decide de l'ecran. Un chauffeur ne voit jamais celui du
+pompiste.
+
+## Ce qui a guide le dessin
+
+L'application est utilisee dehors, a une main, souvent en plein soleil, par des gens au travail
+et presses. Ce n'est pas un tableau de bord qu'on consulte assis. D'ou :
+
+- **Le bon est un ticket.** Talon avec le montant, perforation, QR — l'objet papier qu'il
+  remplace. Le chauffeur reconnait la forme avant de lire quoi que ce soit.
+- **Le verdict prend tout l'ecran.** Vert plein « SERVIR 20 000 », rouge plein « NE PAS SERVIR »
+  avec le motif. Lisible a un metre. Il ne s'efface pas tout seul : c'est le pompiste qui le
+  referme quand il a servi.
+- **Semantique feu tricolore assumee**, parce que l'ecran du pompiste *est* un feu.
+- **Surfaces tactiles jamais sous 56 px**, focus clavier toujours visible, animations coupees
+  si le systeme le demande.
+- **Montants en chiffres tabulaires**, largeur de police poussee : ils s'alignent d'une ligne a
+  l'autre et ne dansent pas.
+
+Polices auto-hebergees (Archivo, Public Sans) : rien a telecharger depuis un CDN sur un reseau
+dakarois.
+
+## Ce que le front ne fait pas
+
+- **Il ne decide jamais si un bon est valable.** Seul le serveur sait si un bon a deja servi.
+  Sans reseau, le pompiste lit « ne pas servir » plutot qu'un feu vert qui ne voudrait rien dire.
+- **Il ne detient aucun secret.** Le jeton de session est obtenu par l'utilisateur avec son
+  propre numero et expire de lui-meme. Les cles de signature restent cote serveur.
+- **Il ne formule pas les refus a partir des messages du serveur.** Le serveur renvoie un code
+  stable (`DEJA_SERVI`, `BON_EXPIRE`…) ; c'est `Pompiste.tsx` qui decide ce que le pompiste lit.
+  Un identifiant de bon et un horodatage ISO n'ont rien a faire devant quelqu'un qui tient un
+  pistolet a carburant.
+
+## Reste a faire
+
+- Service worker : consultation hors ligne du dernier bon, file d'actions a la reconnexion.
+- Ecran administrateur : suivi des bons, rapprochement.
+- Envoi du code par SMS ou WhatsApp — bloque cote serveur, faute d'identifiants.
