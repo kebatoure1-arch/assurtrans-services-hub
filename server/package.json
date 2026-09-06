@@ -1,0 +1,18 @@
+{
+  "name": "assurtrans-settlement-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Orchestration du règlement de la carte carburant post-payée TotalEnergies depuis un portefeuille Wave Business. Mode DRY_RUN tant que les paramètres §14 ne sont pas obtenus.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "scan:secrets": "node scripts/scan-secrets.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "~5.7.2",
+    "vitest": "^2.1.9"
+  }
+}

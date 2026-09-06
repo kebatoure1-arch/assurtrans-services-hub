@@ -1,0 +1,44 @@
+# Dépendances
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+dist/
+dist-ssr/
+build/
+coverage/
+*.local
+
+# ---------------------------------------------------------------------------
+# Secrets — rien de ce qui suit ne doit atteindre le dépôt.
+# Seuls les fichiers `.env.example` sont versionnés, et ils ne contiennent
+# aucune valeur : uniquement des noms de variables et leur documentation.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!server/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.vault-token
+
+# Éditeurs
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

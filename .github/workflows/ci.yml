@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  serveur:
+    name: Module de règlement
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      # Premier item de la Definition of Done : aucun secret dans le repo ni le
+      # bundle client. Volontairement placé AVANT les tests — un secret exposé
+      # rend le reste sans objet.
+      - name: Scan de secrets
+        run: npm run scan:secrets
+
+      - name: Vérification des types
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
