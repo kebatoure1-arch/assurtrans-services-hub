@@ -94,9 +94,9 @@ l'ADR-001. Si le wallet disparaît, ces clés disparaissent avec.
 
 ## Ce qui n'a pas été fait, et pourquoi
 
-Les fonctions du front qui lisent ces variables **n'ont pas été supprimées**. Les retirer
-aujourd'hui casserait le paiement TPE, la signature des QR et l'envoi de SMS sans rien
-remplacer — les routes serveur correspondantes n'existent pas encore.
+Les fonctions du front qui lisent les variables restantes **n'ont pas été supprimées**. Les
+retirer aujourd'hui casserait la signature des QR et l'envoi de SMS sans rien remplacer — les
+routes serveur correspondantes n'existent pas encore.
 
 Ce qui a été fait est le préalable : les noms de variables ont disparu de `.env.example`, donc
 **plus personne ne peut renseigner un secret au mauvais endroit**, et le scan CI échoue si
@@ -118,5 +118,5 @@ Le scan est exécuté en CI sur chaque poussée (`.github/workflows/ci.yml`) et 
 Il détecte : les clés Wave en clair, les variables `VITE_*` désignant un secret, les jetons
 porteurs codés en dur et les secrets de repli codés en dur.
 
-Le dépôt n'est pas encore sous git (`git init` n'a pas été fait). Le `.gitignore` est en place
-pour le jour où il le sera : aucun `.env` ne doit y entrer.
+Le dépôt est sous git depuis le 2026-09-06. Le `.gitignore` exclut tout `.env` ; seuls les
+`.env.example`, sans valeur, sont versionnés.
