@@ -1,11 +1,18 @@
 # ADR-001 — Option réglementaire retenue
 
-- **Statut** : Accepté (v1)
+- **Statut** : Accepté, **partiellement révisé par l'ADR-003** le 2026-09-06
 - **Date** : 2026-09-05
 - **Décideurs** : Assur'Trans — à contresigner par la direction avant mise en production
 - **Contexte réglementaire** : Instruction BCEAO n°008-05-2015 relative aux modalités d'exercice
   des activités des émetteurs de monnaie électronique dans l'UEMOA.
   ⚠️ **La version en vigueur doit être vérifiée avant production** (cf. §14 param. 5).
+
+> **Révision.** La décision « aucun encaissement de tiers en v1 » ci-dessous ne tient plus :
+> les chauffeurs paient désormais Assur'Trans et reçoivent un bon carburant. Voir
+> `ADR-003-bon-carburant.md`, qui expose la condition de conception rendant cet encaissement
+> tenable — le bon à usage unique plutôt que le solde rechargeable. Le reste de cet ADR reste
+> en vigueur : Assur'Trans ne détient aucun solde appartenant à un chauffeur, et le portefeuille
+> Wave ne règle que des factures TotalEnergies émises au nom de l'entité.
 
 ## Contexte
 

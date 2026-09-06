@@ -9,7 +9,7 @@ depuis un portefeuille **Wave Business** détenu par l'entité.
 ```bash
 cd server
 npm install
-npm test          # 92 tests
+npm test          # 117 tests
 npm run typecheck
 npm run scan:secrets
 ```
@@ -20,12 +20,17 @@ npm run scan:secrets
 
 Cette section prime sur toute autre. Elle est volontairement placée avant les fonctionnalités.
 
-### Il n'encaisse personne
+### Il ne conserve aucun solde appartenant à un chauffeur
 
-Aucune route entrante. Ni Checkout, ni Aggregated Merchants, ni wallet client. Le portefeuille
-Wave Business règle **uniquement** la consommation propre de l'entité (ADR-001, option A).
-Encaisser un tiers puis régler TotalEnergies avec ces fonds constituerait une détention de fonds
-pour compte de tiers — fait générateur d'agrément EME/PSP.
+Depuis l'ADR-003, les chauffeurs paient Assur'Trans et reçoivent un **bon carburant à usage
+unique** : montant figé, une seule consommation, expiration courte, stations TotalEnergies
+uniquement, non transférable, sans remboursement en avoir.
+
+Ce qui reste exclu : le **solde rechargeable**. Un chauffeur ne peut pas créditer un compte chez
+Assur'Trans et le dépenser au fil de l'eau — ce serait de la valeur stockée, donc de la monnaie
+électronique, donc un agrément EME/PSP. Le domaine n'expose aucune opération de crédit de solde.
+
+Le portefeuille Wave Business ne règle que des factures TotalEnergies émises au nom de l'entité.
 
 ### Il ne paie pas un code marchand
 
@@ -111,28 +116,32 @@ server/
 ├── docs/
 │   ├── ADR-001-option-reglementaire.md   Option A — mandat pur, aucun encaissement de tiers
 │   ├── ADR-002-canal-reglement.md        B2B vs MOBILE — BLOQUÉ en attente de TotalEnergies
+│   ├── ADR-003-bon-carburant.md          Bon à usage unique plutôt que solde rechargeable
 │   ├── SECRETS.md                        Modèle de gestion des secrets + plan de migration
 │   └── RUNBOOK.md                        Procédures d'incident
 ├── migrations/
-│   └── 0001_init.sql                     Schéma + contraintes d'intégrité en base
+│   ├── 0001_init.sql                     Schéma + contraintes d'intégrité en base
+│   └── 0002_bons_carburant.sql           Chauffeurs, paiements, bons, envois, stations
 ├── src/
 │   ├── domain/                           Logique métier pure. Zéro I/O.
 │   │   ├── money.ts                      XOF entier. Aucun flottant, aucun centime.
 │   │   ├── credit-line.ts                Encours, seuils, projection d'atteinte du blocage
 │   │   ├── payment-intent.ts             Machine à états du règlement
+│   │   ├── fuel-voucher.ts               Bon à usage unique : émission, consommation, annulation
 │   │   └── reconciliation.ts             Rapprochement à trois voies
 │   ├── config.ts                         Chargement au démarrage, échec immédiat si incomplet
 │   ├── ports/
 │   │   └── settlement-channel.ts         Interface de sortie de fonds
 │   └── infra/
 │       ├── secrets/secrets.ts            Secret non journalisable, refus du préfixe VITE_
+│       ├── security/voucher-signature.ts Signature HMAC du QR, rotation de clé supportée
 │       └── wave/
 │           ├── wave-client.ts            HTTP. Endpoints documentés uniquement.
 │           ├── payout-channels.ts        B2BPayoutChannel | MobilePayoutChannel
 │           ├── dry-run-channel.ts        Mode par défaut. Aucun appel réseau.
 │           └── resolve-channel.ts        Sélection par configuration
 ├── scripts/scan-secrets.mjs              Scan CI (§11, item 1) + référence figée
-└── test/                                 92 tests
+└── test/                                 117 tests
 ```
 
 ### Garanties couvertes par les tests
@@ -158,6 +167,11 @@ server/
 | Tout nom préfixé `VITE_` est refusé côté serveur, sans repli | `secrets.spec.ts` |
 | Un secret manquant ou un plafond absent empêche le démarrage | `config.spec.ts` |
 | Un canal réel sans champ de référence d'imputation est refusé | `config.spec.ts` |
+| Un bon ne se consomme qu'une fois ; un second pompiste est refusé avec la trace du premier | `fuel-voucher.spec.ts` |
+| Un même scan rejoué ne sert pas deux fois et n'affiche pas d'erreur au pompiste | `fuel-voucher.spec.ts` |
+| Un bon expiré ou annulé est refusé | `fuel-voucher.spec.ts` |
+| Un montant gonflé dans le QR invalide la signature | `voucher-signature.spec.ts` |
+| Une rotation de clé n'invalide pas les bons déjà envoyés | `voucher-signature.spec.ts` |
 
 ### Séparation des rôles
 
