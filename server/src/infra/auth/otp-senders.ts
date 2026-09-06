@@ -11,6 +11,47 @@
  */
 
 import type { OtpSender } from '../../ports/authentication.ts';
+import type { Secret } from '../secrets/secrets.ts';
+
+export interface AfricasTalkingConfig {
+  readonly apiKey: Secret;
+  readonly username: string;
+  readonly baseUrl: string;
+  readonly senderId: string | null;
+}
+
+export class AfricasTalkingOtpSender implements OtpSender {
+  constructor(private readonly config: AfricasTalkingConfig) {}
+
+  async envoyer(msisdn: string, code: string): Promise<boolean> {
+    const corps = new URLSearchParams({
+      username: this.config.username,
+      to: msisdn,
+      message: `Assur'Trans : votre code de connexion est ${code}. Il expire dans 5 minutes.`,
+    });
+    if (this.config.senderId !== null) corps.set('from', this.config.senderId);
+
+    try {
+      const response = await fetch(`${this.config.baseUrl.replace(/\/$/, '')}/version1/messaging`, {
+        method: 'POST',
+        headers: {
+          apiKey: this.config.apiKey.expose(),
+          'content-type': 'application/x-www-form-urlencoded',
+          accept: 'application/json',
+        },
+        body: corps,
+      });
+      if (!response.ok) {
+        console.error(`Envoi SMS Africa's Talking refuse (${response.status})`);
+        return false;
+      }
+      return true;
+    } catch (cause) {
+      console.error("Echec reseau de l'envoi SMS Africa's Talking", cause);
+      return false;
+    }
+  }
+}
 
 export class LogOtpSender implements OtpSender {
   async envoyer(msisdn: string, code: string): Promise<boolean> {

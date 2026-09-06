@@ -9,7 +9,7 @@
 import { xof, type XOF } from './domain/money.ts';
 import type { CanalReglement } from './domain/payment-intent.ts';
 import type { CanalEncaissement } from './ports/collection-channel.ts';
-import type { SecretProvider } from './infra/secrets/secrets.ts';
+import type { Secret, SecretProvider } from './infra/secrets/secrets.ts';
 import type { WaveConfig } from './infra/wave/wave-client.ts';
 
 export class ConfigurationError extends Error {
@@ -49,6 +49,13 @@ export interface AppConfig {
     readonly maxTentatives: number;
     readonly maxDemandesParHeure: number;
     readonly echoCode: boolean;
+  };
+  readonly sms: {
+    readonly provider: 'AFRICAS_TALKING' | 'LOG';
+    readonly apiKey: Secret | null;
+    readonly username: string | null;
+    readonly baseUrl: string;
+    readonly senderId: string | null;
   };
   readonly sessionDureeHeures: number;
   /** Origines autorisees pour le front. Liste explicite, pas de joker. */
@@ -116,6 +123,12 @@ export async function loadConfig(
   const canalEncaissement = canalEncaissementRequis(env);
   const payoutReferenceField = env.WAVE_PAYOUT_REFERENCE_FIELD?.trim() ?? '';
   const checkoutLaunchUrlField = env.WAVE_CHECKOUT_LAUNCH_URL_FIELD?.trim() ?? '';
+  const smsProvider = env.OTP_SMS_PROVIDER?.trim() || 'LOG';
+  if (smsProvider !== 'AFRICAS_TALKING' && smsProvider !== 'LOG') {
+    throw new ConfigurationError(
+      `« OTP_SMS_PROVIDER » doit valoir AFRICAS_TALKING ou LOG (reçu « ${smsProvider} »)`,
+    );
+  }
 
   if (canalParDefaut !== 'DRY_RUN' && payoutReferenceField === '') {
     throw new ConfigurationError(
@@ -162,6 +175,13 @@ export async function loadConfig(
       maxDemandesParHeure: entierRequis(env, 'OTP_MAX_DEMANDES_PAR_HEURE'),
       // Renvoie le code dans la reponse HTTP. Vrai uniquement en demonstration.
       echoCode: env.OTP_ECHO === 'true',
+    },
+    sms: {
+      provider: smsProvider,
+      apiKey: smsProvider === 'AFRICAS_TALKING' ? await secrets.get('AFRICAS_TALKING_API_KEY') : null,
+      username: smsProvider === 'AFRICAS_TALKING' ? requis(env, 'AFRICAS_TALKING_USERNAME') : null,
+      baseUrl: env.AFRICAS_TALKING_BASE_URL?.trim() || 'https://api.africastalking.com',
+      senderId: env.AFRICAS_TALKING_SENDER_ID?.trim() || null,
     },
     sessionDureeHeures: entierRequis(env, 'SESSION_DUREE_HEURES'),
     originesAutorisees: (env.ORIGINES_AUTORISEES ?? '')

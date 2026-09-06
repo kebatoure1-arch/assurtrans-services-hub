@@ -27,10 +27,10 @@ function Aiguillage() {
         </button>
       </header>
       <main className="vue">
-        <h1 className="titre">Espace administrateur</h1>
+        <h1 className="titre">Espace administrateur indisponible</h1>
         <p className="chapo">
-          Le suivi des bons et le rapprochement des reglements se font pour l'instant cote
-          serveur. Cet ecran arrivera avec eux.
+          Aucun tableau de bord n’est disponible ici pour le moment. Votre session est bien
+          fermée derrière cet écran : aucune action administrateur n’est proposée.
         </p>
       </main>
     </div>

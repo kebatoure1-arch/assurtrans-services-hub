@@ -20,7 +20,7 @@ import {
   PgApiTokenIssuer,
   PgOtpChallengeRepository,
 } from './infra/db/pg-auth.ts';
-import { LogOtpSender } from './infra/auth/otp-senders.ts';
+import { AfricasTalkingOtpSender, LogOtpSender } from './infra/auth/otp-senders.ts';
 import { PgDatabase } from './infra/db/pg-pool.ts';
 import {
   PgCheckoutSessionRepository,
@@ -109,9 +109,15 @@ async function main(): Promise<void> {
     originesAutorisees: config.originesAutorisees,
     auth: new AuthenticateByPhone({
       challenges: new PgOtpChallengeRepository(db),
-      // ⛔ Passerelle SMS non branchee : le code part au journal serveur, pas au telephone.
-      //    Remplacer par l'adaptateur SMS ou WhatsApp des que les identifiants sont obtenus.
-      sender: new LogOtpSender(),
+      sender:
+        config.sms.provider === 'AFRICAS_TALKING'
+          ? new AfricasTalkingOtpSender({
+              apiKey: config.sms.apiKey!,
+              username: config.sms.username!,
+              baseUrl: config.sms.baseUrl,
+              senderId: config.sms.senderId,
+            })
+          : new LogOtpSender(),
       annuaire: new PgAnnuaireComptes(db),
       jetons: new PgApiTokenIssuer(db),
       ids: uuid,
@@ -129,7 +135,8 @@ async function main(): Promise<void> {
       canalReglement: config.canalParDefaut,
       canalEncaissement: config.canalEncaissement,
       webhooksArmes: config.webhook.signatureHeader !== '',
-      envoiCodeParSms: false,
+      envoiCodeParSms: config.sms.provider === 'AFRICAS_TALKING',
+      passerelleSms: config.sms.provider,
       echoCodeActif: config.otp.echoCode,
       originesAutorisees: config.originesAutorisees,
       lectureEvenementsArmee: config.checkout.eventType !== '',

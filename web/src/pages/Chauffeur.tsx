@@ -15,6 +15,24 @@ import { francs, jourEtHeure, restant } from '../lib/format.ts';
 import { useSession } from '../lib/session.tsx';
 
 const MONTANTS_COURANTS = [5000, 10000, 20000];
+const CLE_DERNIER_BON = 'assurtrans.dernier-bon';
+
+function lireDernierBon(): Bon | null {
+  try {
+    const brut = localStorage.getItem(CLE_DERNIER_BON);
+    return brut === null ? null : (JSON.parse(brut) as Bon);
+  } catch {
+    return null;
+  }
+}
+
+function enregistrerDernierBon(bon: Bon): void {
+  try {
+    localStorage.setItem(CLE_DERNIER_BON, JSON.stringify(bon));
+  } catch {
+    // Le stockage peut être désactivé, le mode connecté reste utilisable.
+  }
+}
 
 function Ticket({ bon }: { bon: Bon }) {
   const [image, setImage] = useState<string | null>(null);
@@ -99,6 +117,7 @@ export function Chauffeur() {
   const [montant, setMontant] = useState<number | null>(null);
   const [montantLibre, setMontantLibre] = useState('');
   const [enCours, setEnCours] = useState(false);
+  const [horsLigne, setHorsLigne] = useState(false);
 
   const message = (cause: unknown): string => {
     if (cause instanceof ErreurReseau) return 'Pas de connexion. Vos bons s’afficheront au retour du réseau.';
@@ -108,11 +127,16 @@ export function Chauffeur() {
 
   const charger = useCallback(async () => {
     try {
-      setBons(await api.mesBons(jeton));
+      const recents = await api.mesBons(jeton);
+      if (recents[0] !== undefined) enregistrerDernierBon(recents[0]);
+      setBons(recents);
+      setHorsLigne(false);
       setErreur(null);
     } catch (cause) {
       setErreur(message(cause));
-      setBons((precedents) => precedents ?? []);
+      const dernier = lireDernierBon();
+      setBons((precedents) => precedents ?? (dernier === null ? [] : [dernier]));
+      setHorsLigne(true);
     }
   }, [jeton]);
 
@@ -151,6 +175,9 @@ export function Chauffeur() {
       </header>
 
       <main className="vue">
+        {horsLigne && (
+          <p className="message info">Hors connexion : affichage du dernier bon connu seulement.</p>
+        )}
         {bons === null ? (
           <p className="chargement">Chargement…</p>
         ) : actif !== undefined ? (
