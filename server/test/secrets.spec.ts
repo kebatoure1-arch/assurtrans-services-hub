@@ -6,7 +6,7 @@ import {
   Secret,
   EnvSecretProvider,
   CachingSecretProvider,
-} from '../src/infra/secrets/secrets';
+} from '../src/infra/secrets/secrets.ts';
 
 describe('Secret — une valeur qui refuse de se laisser journaliser', () => {
   const s = new Secret('wave_sn_prod_ABCDEF123456', 'WAVE_API_KEY');

@@ -13,7 +13,7 @@
  * jamais recopiée dans un message d'erreur, jamais renvoyée à l'appelant.
  */
 
-import type { Secret } from '../secrets/secrets';
+import type { Secret } from '../secrets/secrets.ts';
 
 export interface HttpRequest {
   readonly method: 'GET' | 'POST';

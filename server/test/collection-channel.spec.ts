@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { xof } from '../src/domain/money';
-import { Secret } from '../src/infra/secrets/secrets';
-import { EndpointContractUnknownError, type HttpTransport } from '../src/infra/wave/wave-client';
-import { resolveCollectionChannel } from '../src/infra/wave/resolve-collection';
-import { DryRunCollectionChannel } from '../src/infra/wave/dry-run-collection-channel';
+import { xof } from '../src/domain/money.ts';
+import { Secret } from '../src/infra/secrets/secrets.ts';
+import { EndpointContractUnknownError, type HttpTransport } from '../src/infra/wave/wave-client.ts';
+import { resolveCollectionChannel } from '../src/infra/wave/resolve-collection.ts';
+import { DryRunCollectionChannel } from '../src/infra/wave/dry-run-collection-channel.ts';
 
 const CONFIG = {
   baseUrl: 'https://api.wave.com',

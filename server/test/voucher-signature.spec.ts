@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { Secret } from '../src/infra/secrets/secrets';
+import { Secret } from '../src/infra/secrets/secrets.ts';
 import {
   InvalidSignatureError,
   MalformedTokenError,
   VoucherSigner,
-} from '../src/infra/security/voucher-signature';
+} from '../src/infra/security/voucher-signature.ts';
 
 const CLE = new Secret('a'.repeat(64), 'QR_SIGNATURE_SECRET');
 const AUTRE_CLE = new Secret('b'.repeat(64), 'QR_SIGNATURE_SECRET');

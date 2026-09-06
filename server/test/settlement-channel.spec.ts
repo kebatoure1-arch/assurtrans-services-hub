@@ -1,11 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { xof } from '../src/domain/money';
-import { EndpointContractUnknownError, WaveClient, type HttpTransport } from '../src/infra/wave/wave-client';
-import { Secret } from '../src/infra/secrets/secrets';
-import { resolveSettlementChannel } from '../src/infra/wave/resolve-channel';
-import { DryRunChannel } from '../src/infra/wave/dry-run-channel';
+import { xof } from '../src/domain/money.ts';
+import { EndpointContractUnknownError, WaveClient, type HttpTransport } from '../src/infra/wave/wave-client.ts';
+import { Secret } from '../src/infra/secrets/secrets.ts';
+import { resolveSettlementChannel } from '../src/infra/wave/resolve-channel.ts';
+import { DryRunChannel } from '../src/infra/wave/dry-run-channel.ts';
 
 const ordre = {
   intentId: 'pi-1',

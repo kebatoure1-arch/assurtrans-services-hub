@@ -1,15 +1,15 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { xof } from '../src/domain/money';
-import type { FuelVoucher, VoucherStatut } from '../src/domain/fuel-voucher';
-import { Secret } from '../src/infra/secrets/secrets';
-import { VoucherSigner } from '../src/infra/security/voucher-signature';
-import { EmitVoucherOnPayment } from '../src/application/emit-voucher-on-payment';
+import { xof } from '../src/domain/money.ts';
+import type { FuelVoucher, VoucherStatut } from '../src/domain/fuel-voucher.ts';
+import { Secret } from '../src/infra/secrets/secrets.ts';
+import { VoucherSigner } from '../src/infra/security/voucher-signature.ts';
+import { EmitVoucherOnPayment } from '../src/application/emit-voucher-on-payment.ts';
 import {
   MontantIncoherentError,
   RedeemVoucherAtStation,
   VoucherIntrouvableError,
-} from '../src/application/redeem-voucher-at-station';
-import { AlreadyRedeemedError, VoucherExpiredError } from '../src/domain/fuel-voucher';
+} from '../src/application/redeem-voucher-at-station.ts';
+import { AlreadyRedeemedError, VoucherExpiredError } from '../src/domain/fuel-voucher.ts';
 import type {
   Driver,
   DriverPayment,
@@ -18,7 +18,7 @@ import type {
   DeliveryRequest,
   VoucherDeliveryQueue,
   VoucherRepository,
-} from '../src/ports/repositories';
+} from '../src/ports/repositories.ts';
 
 // --------------------------------------------------------------- doublures
 

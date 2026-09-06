@@ -11,7 +11,7 @@
  * paramètre — un bon ne doit jamais dépendre de l'heure de la machine qui l'évalue.
  */
 
-import { positiveXof, type XOF } from './money';
+import { positiveXof, type XOF } from './money.ts';
 
 export type VoucherStatut = 'EMIS' | 'CONSOMME' | 'ANNULE';
 

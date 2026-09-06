@@ -14,10 +14,10 @@
  * déjà servi » : seule la base le sait. C'est pourquoi la consommation exige un appel serveur.
  */
 
-import type { XOF } from '../domain/money';
-import { AlreadyRedeemedError, redeemVoucher } from '../domain/fuel-voucher';
-import type { VoucherSigner } from '../infra/security/voucher-signature';
-import type { VoucherRepository } from '../ports/repositories';
+import type { XOF } from '../domain/money.ts';
+import { AlreadyRedeemedError, redeemVoucher } from '../domain/fuel-voucher.ts';
+import type { VoucherSigner } from '../infra/security/voucher-signature.ts';
+import type { VoucherRepository } from '../ports/repositories.ts';
 
 export class VoucherIntrouvableError extends Error {
   constructor(id: string) {

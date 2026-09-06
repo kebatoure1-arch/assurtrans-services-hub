@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "sourceMap": true,
+    "declaration": false,
+    // TypeScript réécrit les extensions .ts des imports relatifs en .js à l'émission.
+    // C'est ce qui permet d'écrire des imports explicites dans les sources ET d'obtenir un
+    // bundle exécutable par Node en ESM strict.
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": ["src"]
+}

@@ -5,8 +5,8 @@
  * de mobile. Basculer `B2B` ↔ `MOBILE` ne touche aucun fichier de `src/domain/`.
  */
 
-import type { CanalReglement } from '../domain/payment-intent';
-import type { XOF } from '../domain/money';
+import type { CanalReglement } from '../domain/payment-intent.ts';
+import type { XOF } from '../domain/money.ts';
 
 export interface SettlementOrder {
   readonly intentId: string;

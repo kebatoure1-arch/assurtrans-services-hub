@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { xof } from '../src/domain/money';
-import { evaluateCreditLine, projectBlockingDate } from '../src/domain/credit-line';
+import { xof } from '../src/domain/money.ts';
+import { evaluateCreditLine, projectBlockingDate } from '../src/domain/credit-line.ts';
 
 const contrat = {
   encoursAutorise: xof(10_000_000),

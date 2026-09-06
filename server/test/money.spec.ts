@@ -8,7 +8,7 @@ import {
   sumXof,
   xof,
   ZERO_XOF,
-} from '../src/domain/money';
+} from '../src/domain/money.ts';
 
 describe('money — XOF entier, aucun flottant', () => {
   it('accepte un entier positif', () => {

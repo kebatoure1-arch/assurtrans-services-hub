@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { xof } from '../src/domain/money';
+import { xof } from '../src/domain/money.ts';
 import {
   AlreadyRedeemedError,
   emitVoucher,
@@ -9,7 +9,7 @@ import {
   VoucherExpiredError,
   cancelVoucher,
   estExpire,
-} from '../src/domain/fuel-voucher';
+} from '../src/domain/fuel-voucher.ts';
 
 const EMISSION = '2026-09-06T10:00:00.000Z';
 const EXPIRATION = '2026-09-07T10:00:00.000Z';

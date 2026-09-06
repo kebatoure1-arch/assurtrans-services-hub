@@ -11,8 +11,8 @@ import type {
   CollectionChannel,
   CollectionOrder,
   CollectionResult,
-} from '../../ports/collection-channel';
-import { EndpointContractUnknownError, type WaveClient, type WaveConfig } from './wave-client';
+} from '../../ports/collection-channel.ts';
+import { EndpointContractUnknownError, type WaveClient, type WaveConfig } from './wave-client.ts';
 
 function extraitUrl(body: unknown, champ: string): string | null {
   if (typeof body !== 'object' || body === null) return null;

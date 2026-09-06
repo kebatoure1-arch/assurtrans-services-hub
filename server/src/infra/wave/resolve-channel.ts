@@ -6,11 +6,11 @@
  * passé sous la forme du port `SettlementChannel`.
  */
 
-import type { CanalReglement } from '../../domain/payment-intent';
-import type { SettlementChannel } from '../../ports/settlement-channel';
-import { DryRunChannel } from './dry-run-channel';
-import { B2BPayoutChannel, MobilePayoutChannel } from './payout-channels';
-import { type HttpTransport, WaveClient, type WaveConfig } from './wave-client';
+import type { CanalReglement } from '../../domain/payment-intent.ts';
+import type { SettlementChannel } from '../../ports/settlement-channel.ts';
+import { DryRunChannel } from './dry-run-channel.ts';
+import { B2BPayoutChannel, MobilePayoutChannel } from './payout-channels.ts';
+import { type HttpTransport, WaveClient, type WaveConfig } from './wave-client.ts';
 
 export interface ContratReglement {
   readonly canal: CanalReglement;

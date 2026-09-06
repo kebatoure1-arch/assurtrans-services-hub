@@ -6,11 +6,11 @@
  * fournie pour une valeur sensible ou monétaire.
  */
 
-import { xof, type XOF } from './domain/money';
-import type { CanalReglement } from './domain/payment-intent';
-import type { CanalEncaissement } from './ports/collection-channel';
-import type { SecretProvider } from './infra/secrets/secrets';
-import type { WaveConfig } from './infra/wave/wave-client';
+import { xof, type XOF } from './domain/money.ts';
+import type { CanalReglement } from './domain/payment-intent.ts';
+import type { CanalEncaissement } from './ports/collection-channel.ts';
+import type { SecretProvider } from './infra/secrets/secrets.ts';
+import type { WaveConfig } from './infra/wave/wave-client.ts';
 
 export class ConfigurationError extends Error {
   constructor(message: string) {
@@ -35,6 +35,15 @@ export interface AppConfig {
   readonly plafonds: PlafondsServeur;
   /** Durée de validité d'un bon carburant, en heures. */
   readonly validiteBonHeures: number;
+  /** Bornes du montant d'un bon. Un chauffeur ne demande ni 1 franc ni 100 millions. */
+  readonly montantBon: { readonly minXof: XOF; readonly maxXof: XOF };
+  readonly webhook: { readonly signatureHeader: string; readonly toleranceSecondes: number };
+  readonly checkout: {
+    readonly eventType: string;
+    readonly referencePath: string;
+    readonly montantPath: string;
+  };
+  readonly port: number;
 }
 
 function requis(env: Record<string, string | undefined>, nom: string): string {
@@ -114,9 +123,30 @@ export async function loadConfig(
     );
   }
 
+  const montantBonMin = montantRequis(env, 'MONTANT_BON_MIN_XOF');
+  const montantBonMax = montantRequis(env, 'MONTANT_BON_MAX_XOF');
+  if (montantBonMin >= montantBonMax) {
+    throw new ConfigurationError(
+      `MONTANT_BON_MIN_XOF (${montantBonMin}) doit être strictement inférieur à ` +
+        `MONTANT_BON_MAX_XOF (${montantBonMax})`,
+    );
+  }
+
   return {
     canalParDefaut,
     canalEncaissement,
+    montantBon: { minXof: montantBonMin, maxXof: montantBonMax },
+    webhook: {
+      // Vide ⇒ la vérification refuse de s'exécuter. Voir infra/webhooks/webhook.ts.
+      signatureHeader: env.WAVE_WEBHOOK_SIGNATURE_HEADER?.trim() ?? '',
+      toleranceSecondes: entierRequis(env, 'WEBHOOK_TOLERANCE_SECONDES'),
+    },
+    checkout: {
+      eventType: env.CHECKOUT_EVENT_TYPE?.trim() ?? '',
+      referencePath: env.CHECKOUT_REFERENCE_PATH?.trim() ?? '',
+      montantPath: env.CHECKOUT_AMOUNT_PATH?.trim() ?? '',
+    },
+    port: entierRequis(env, 'PORT'),
     validiteBonHeures: entierRequis(env, 'VALIDITE_BON_HEURES'),
     wave: {
       baseUrl: env.WAVE_BASE_URL?.trim() || 'https://api.wave.com',

@@ -17,9 +17,9 @@
  * renseigné, la vérification refuse de s'exécuter plutôt que de valider n'importe quoi.
  */
 
-import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { Secret } from '../secrets/secrets';
-import { EndpointContractUnknownError } from '../wave/wave-client';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import type { Secret } from '../secrets/secrets.ts';
+import { EndpointContractUnknownError } from '../wave/wave-client.ts';
 
 export class WebhookError extends Error {
   constructor(message: string, nom: string) {
@@ -60,6 +60,8 @@ export interface VerifiedWebhook {
   readonly eventId: string;
   readonly eventType: string;
   readonly emisA: string;
+  /** Empreinte du corps brut, pour tracer sans conserver de données de payeur. */
+  readonly payloadHash: string;
   readonly payload: Record<string, unknown>;
 }
 
@@ -141,6 +143,7 @@ export class WebhookVerifier {
       eventId,
       eventType: typeof eventType === 'string' ? eventType : 'inconnu',
       emisA: new Date(unix * 1000).toISOString(),
+      payloadHash: createHash('sha256').update(input.rawBody, 'utf8').digest('hex'),
       payload: objet,
     };
   }
@@ -153,15 +156,22 @@ export class WebhookVerifier {
  * pas obtenir `true` toutes les deux. En base, c'est l'insertion dans `webhook_events` avec sa
  * clé primaire qui le garantit.
  */
+export interface EventMeta {
+  readonly eventType: string;
+  /** Empreinte du corps reçu. Jamais le corps lui-même : il peut contenir des données de payeur. */
+  readonly payloadHash: string;
+}
+
 export interface ProcessedEventStore {
-  markIfNew(eventId: string): Promise<boolean>;
+  markIfNew(eventId: string, meta: EventMeta): Promise<boolean>;
   forget(eventId: string): Promise<void>;
 }
 
 export class InMemoryProcessedEventStore implements ProcessedEventStore {
   readonly #vus = new Set<string>();
 
-  async markIfNew(eventId: string): Promise<boolean> {
+  async markIfNew(eventId: string, _meta: EventMeta = { eventType: '', payloadHash: '' }): Promise<boolean> {
+    void _meta;
     if (this.#vus.has(eventId)) return false;
     this.#vus.add(eventId);
     return true;
@@ -181,8 +191,12 @@ export class WebhookDeduplicator {
    * Si le traitement échoue, la marque est retirée : Wave rejouera, et le rejeu doit pouvoir
    * aboutir. Un échec de traitement n'est pas un événement traité.
    */
-  async once(eventId: string, traitement: () => Promise<void>): Promise<boolean> {
-    const nouveau = await this.store.markIfNew(eventId);
+  async once(
+    eventId: string,
+    traitement: () => Promise<void>,
+    meta: EventMeta = { eventType: 'inconnu', payloadHash: '' },
+  ): Promise<boolean> {
+    const nouveau = await this.store.markIfNew(eventId, meta);
     if (!nouveau) return false;
 
     try {

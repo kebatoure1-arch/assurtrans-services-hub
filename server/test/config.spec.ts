@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ConfigurationError, loadConfig } from '../src/config';
-import { EnvSecretProvider, MissingSecretError } from '../src/infra/secrets/secrets';
+import { ConfigurationError, loadConfig } from '../src/config.ts';
+import { EnvSecretProvider, MissingSecretError } from '../src/infra/secrets/secrets.ts';
 
 const secrets = new EnvSecretProvider({ WAVE_API_KEY: 'wave_sn_prod_XYZ123456' });
 
@@ -10,6 +10,10 @@ const ENV_MINIMAL = {
   VALIDITE_BON_HEURES: '24',
   PLAFOND_UNITAIRE_XOF: '10000000',
   PLAFOND_QUOTIDIEN_XOF: '20000000',
+  MONTANT_BON_MIN_XOF: '1000',
+  MONTANT_BON_MAX_XOF: '200000',
+  WEBHOOK_TOLERANCE_SECONDES: '300',
+  PORT: '3000',
 };
 
 describe('loadConfig — échouer au démarrage, pas au premier paiement', () => {
@@ -78,6 +82,22 @@ describe('loadConfig — échouer au démarrage, pas au premier paiement', () =>
     const { PLAFOND_UNITAIRE_XOF, ...sansPlafond } = ENV_MINIMAL;
     void PLAFOND_UNITAIRE_XOF;
     await expect(loadConfig(secrets, sansPlafond)).rejects.toThrow(/PLAFOND_UNITAIRE_XOF/);
+  });
+
+  it('refuse des bornes de bon incohérentes', async () => {
+    await expect(
+      loadConfig(secrets, {
+        ...ENV_MINIMAL,
+        MONTANT_BON_MIN_XOF: '200000',
+        MONTANT_BON_MAX_XOF: '1000',
+      }),
+    ).rejects.toThrow(/strictement inférieur/);
+  });
+
+  it('laisse la vérification des webhooks désarmée tant que l’en-tête n’est pas confirmé', async () => {
+    const c = await loadConfig(secrets, ENV_MINIMAL);
+    expect(c.webhook.signatureHeader).toBe('');
+    expect(c.checkout.eventType).toBe('');
   });
 
   it('refuse un plafond décimal ou formaté', async () => {

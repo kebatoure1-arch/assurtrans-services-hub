@@ -10,14 +10,14 @@
  * lève une exception dès qu'on le touche.
  */
 
-import type { CanalReglement } from '../../domain/payment-intent';
+import type { CanalReglement } from '../../domain/payment-intent.ts';
 import type {
   SettlementChannel,
   SettlementLookup,
   SettlementOrder,
   SettlementResult,
-} from '../../ports/settlement-channel';
-import type { HttpTransport } from './wave-client';
+} from '../../ports/settlement-channel.ts';
+import type { HttpTransport } from './wave-client.ts';
 
 export const PREFIXE_DRY_RUN = 'DRYRUN-';
 

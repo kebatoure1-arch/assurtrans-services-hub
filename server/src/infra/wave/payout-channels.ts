@@ -8,21 +8,21 @@
  * L'API Checkout encaisse ; elle ne règle personne. Aucun code ici ne l'utilise.
  */
 
-import type { CanalReglement } from '../../domain/payment-intent';
-import { xof } from '../../domain/money';
+import type { CanalReglement } from '../../domain/payment-intent.ts';
+import { xof } from '../../domain/money.ts';
 import type {
   SettlementChannel,
   SettlementLookup,
   SettlementOrder,
   SettlementResult,
-} from '../../ports/settlement-channel';
+} from '../../ports/settlement-channel.ts';
 import {
   EndpointContractUnknownError,
   type PayoutRequest,
   WaveClient,
   type WaveConfig,
   type HttpTransport,
-} from './wave-client';
+} from './wave-client.ts';
 
 abstract class WavePayoutChannel implements SettlementChannel {
   abstract readonly canal: CanalReglement;

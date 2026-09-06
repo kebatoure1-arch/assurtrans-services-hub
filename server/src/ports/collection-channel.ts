@@ -8,7 +8,7 @@
  * par `SettlementChannel`, jamais par ici.
  */
 
-import type { XOF } from '../domain/money';
+import type { XOF } from '../domain/money.ts';
 
 export type CanalEncaissement = 'DRY_RUN' | 'WAVE_CHECKOUT';
 

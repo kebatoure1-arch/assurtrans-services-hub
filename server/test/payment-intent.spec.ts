@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { xof } from '../src/domain/money';
+import { xof } from '../src/domain/money.ts';
 import {
   createDraft,
   InvalidTransitionError,
@@ -8,7 +8,7 @@ import {
   SecondFactorRequiredError,
   SegregationOfDutiesError,
   transition,
-} from '../src/domain/payment-intent';
+} from '../src/domain/payment-intent.ts';
 
 const CTX = {
   invoiceMontantXof: xof(4_200_000),

@@ -5,10 +5,10 @@
  * manipulent que le port `CollectionChannel`.
  */
 
-import type { CanalEncaissement, CollectionChannel } from '../../ports/collection-channel';
-import { DryRunCollectionChannel } from './dry-run-collection-channel';
-import { WaveCheckoutChannel } from './checkout-channel';
-import { type HttpTransport, WaveClient, type WaveConfig } from './wave-client';
+import type { CanalEncaissement, CollectionChannel } from '../../ports/collection-channel.ts';
+import { DryRunCollectionChannel } from './dry-run-collection-channel.ts';
+import { WaveCheckoutChannel } from './checkout-channel.ts';
+import { type HttpTransport, WaveClient, type WaveConfig } from './wave-client.ts';
 
 export class CollectionConfigurationError extends Error {
   constructor(message: string) {

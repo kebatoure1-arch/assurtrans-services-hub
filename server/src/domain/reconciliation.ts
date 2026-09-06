@@ -9,8 +9,8 @@
  * Logique pure : aucune I/O.
  */
 
-import { absDelta, delta, type XOF, type XofDelta, ZERO_XOF } from './money';
-import { ETATS_ENVOYES, type PaymentIntentStatut } from './payment-intent';
+import { absDelta, delta, type XOF, type XofDelta, ZERO_XOF } from './money.ts';
+import { ETATS_ENVOYES, type PaymentIntentStatut } from './payment-intent.ts';
 
 export type ReconciliationStatut = 'MATCHED' | 'VARIANCE' | 'ORPHAN';
 

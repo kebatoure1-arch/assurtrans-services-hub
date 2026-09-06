@@ -9,10 +9,40 @@ depuis un portefeuille **Wave Business** détenu par l'entité.
 ```bash
 cd server
 npm install
-npm test          # 158 tests
+npm test              # 194 tests
 npm run typecheck
 npm run scan:secrets
+npm run build && npm start
 ```
+
+Sans configuration, le serveur refuse de demarrer et nomme la variable manquante :
+
+```
+ConfigurationError : variable d'environnement SETTLEMENT_CHANNEL absente ou vide
+MissingSecretError : secret WAVE_API_KEY absent ou vide : aucun repli n'est prevu
+```
+
+## API
+
+| Route | Role | Effet |
+|---|---|---|
+| `GET /health` | public | etat du service |
+| `POST /api/paiements/session` | `DRIVER`, `ADMIN` | ouvre une session de paiement, rend l'URL a presenter au chauffeur |
+| `POST /webhooks/wave` | signature HMAC | confirme un paiement, emet le bon, met le QR en file |
+| `POST /api/station/consommation` | `STATION_OPERATOR` | consomme un bon, rend le montant a servir |
+| `GET /api/bons/:id` | `DRIVER` (le sien), `ADMIN`, `STATION_OPERATOR` | consultation |
+
+Trois regles y sont verifiees par des tests, parce qu'elles se contournent facilement si on ne
+les ecrit pas explicitement :
+
+- **La station vient du jeton, jamais du corps de la requete.** Un pompiste ne sert pas au nom
+  d'une autre station, meme s'il envoie `stationId` dans son message.
+- **Le chauffeur vient du jeton, jamais du corps.** Envoyer `driverId` dans une demande de
+  session ne change rien.
+- **Le montant vient de la session enregistree, jamais du webhook.** Un evenement annoncant un
+  montant different de celui demande n'emet aucun bon et remonte en 422.
+
+Un bon qui ne regarde pas le demandeur rend 404, pas 403 : on ne confirme pas son existence.
 
 ---
 
@@ -121,7 +151,9 @@ server/
 │   └── RUNBOOK.md                        Procédures d'incident
 ├── migrations/
 │   ├── 0001_init.sql                     Schéma + contraintes d'intégrité en base
-│   └── 0002_bons_carburant.sql           Chauffeurs, paiements, bons, envois, stations
+│   ├── 0002_bons_carburant.sql           Chauffeurs, paiements, bons, envois, stations
+│   ├── 0003_acces_api.sql                Jetons d'API, roles, rattachement des pompistes
+│   └── 0004_sessions_paiement.sql        Sessions ouvertes : qui paie, et combien
 ├── src/
 │   ├── domain/                           Logique métier pure. Zéro I/O.
 │   │   ├── money.ts                      XOF entier. Aucun flottant, aucun centime.
@@ -129,7 +161,11 @@ server/
 │   │   ├── payment-intent.ts             Machine à états du règlement
 │   │   ├── fuel-voucher.ts               Bon à usage unique : émission, consommation, annulation
 │   │   └── reconciliation.ts             Rapprochement à trois voies
+│   ├── main.ts                           Cablage. Seul fichier ou le concret rencontre le metier.
 │   ├── config.ts                         Chargement au démarrage, échec immédiat si incomplet
+│   ├── http/
+│   │   ├── server.ts                     Routes Fastify, authentification, corps brut du webhook
+│   │   └── checkout-mapper.ts            Lecture des evenements de paiement, par configuration
 │   ├── application/
 │   │   ├── emit-voucher-on-payment.ts    Paiement confirmé → bon émis → QR mis en file
 │   │   └── redeem-voucher-at-station.ts  Scan du pompiste → consommation atomique
@@ -141,6 +177,10 @@ server/
 │       ├── secrets/secrets.ts            Secret non journalisable, refus du préfixe VITE_
 │       ├── security/voucher-signature.ts Signature HMAC du QR, rotation de clé supportée
 │       ├── webhooks/webhook.ts           Signature, fenêtre d'horodatage, déduplication
+│       ├── auth/api-tokens.ts            Jetons porteurs : seule l'empreinte est stockee
+│       ├── db/sql-executor.ts            Port SQL minimal
+│       ├── db/pg-repositories.ts         Ecritures conditionnelles, BIGINT lus sans arrondi
+│       └── db/pg-pool.ts                 Seul fichier qui connait node-postgres
 │       └── wave/
 │           ├── wave-client.ts            HTTP. Endpoints documentés uniquement.
 │           ├── payout-channels.ts        B2BPayoutChannel | MobilePayoutChannel
@@ -150,7 +190,7 @@ server/
 │           ├── resolve-channel.ts        Sélection du canal de règlement
 │           └── resolve-collection.ts     Sélection du canal d'encaissement
 ├── scripts/scan-secrets.mjs              Scan CI (§11, item 1) + référence figée
-└── test/                                 158 tests
+└── test/                                 194 tests
 ```
 
 ### Garanties couvertes par les tests
@@ -189,6 +229,14 @@ server/
 | Un montant divergent entre le QR et la base est refusé — la base fait foi | `use-cases.spec.ts` |
 | Deux pompistes simultanés : un seul sert | `use-cases.spec.ts` |
 | Le chauffeur garde son bon même si l'envoi WhatsApp échoue | `use-cases.spec.ts` |
+| Un BIGINT lu en base devient un entier, et un decimal est refuse plutot qu'arrondi | `pg-repositories.spec.ts` |
+| La consommation passe par `UPDATE ... WHERE statut = $attendu` | `pg-repositories.spec.ts` |
+| Le jeton signe du QR n'est jamais ecrit dans la table d'envois | `pg-repositories.spec.ts` |
+| Sans jeton, ou avec un role insuffisant, l'API refuse | `http-api.spec.ts` |
+| Un pompiste ne peut pas servir au nom d'une autre station | `http-api.spec.ts` |
+| Un webhook au corps modifie apres signature n'emet aucun bon | `http-api.spec.ts` |
+| Un montant paye different du montant demande n'emet aucun bon | `http-api.spec.ts` |
+| Un chauffeur ne peut pas consulter le bon d'un autre | `http-api.spec.ts` |
 
 ### Séparation des rôles
 
@@ -209,16 +257,16 @@ Deux règles sont codées, l'une exigée par le cahier des charges, l'autre ajou
 
 Dans l'ordre où cela devrait être fait :
 
-1. Couche de persistance : implémenter les ports de `repositories.ts` sur Postgres. Les deux
-   écritures conditionnelles (`saveIfNew`, `saveIfStatut`) deviennent des `INSERT ... ON CONFLICT`
-   et des `UPDATE ... WHERE statut = $attendu` — c'est là que se joue l'atomicité.
-2. API HTTP : encaissement, réception du webhook, écran pompiste, authentification et rôles.
-3. Envoi WhatsApp — **bloqué** : identifiants WhatsApp Business et modèle approuvé par Meta.
-4. `AuditLogger` branché sur `audit_events`.
-5. `Scheduler` : jobs at-least-once, verrou via `job_locks`, intention de règlement à J-n.
-6. Import du relevé de consommation TE — **format à obtenir** (§14, paramètre 4).
+1. **Tests d'integration sur une vraie base.** Les repositories sont testes contre une doublure
+   qui verifie la forme du SQL, pas son execution. Les contraintes des migrations ne sont donc
+   pas prouvees. C'est le trou de couverture le plus important aujourd'hui.
+2. Envoi WhatsApp — **bloque** : identifiants WhatsApp Business et modele approuve par Meta.
+3. Worker d'envoi et reprise des envois en echec.
+4. `AuditLogger` branche sur `audit_events`.
+5. `Scheduler` : jobs at-least-once, verrou via `job_locks`, intention de reglement a J-n.
+6. Import du releve de consommation TE — **format a obtenir** (§14, parametre 4).
 7. PWA installable (manifest, service worker, file d'actions hors ligne, Web Push VAPID).
-8. Jeu d'enregistrements de réponses réelles en sandbox Wave.
+8. Jeu d'enregistrements de reponses reelles en sandbox Wave.
 
 ---
 

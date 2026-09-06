@@ -11,7 +11,7 @@
  *      automatique.
  */
 
-import { absDelta, delta, type XOF, type XofDelta } from './money';
+import { absDelta, delta, type XOF, type XofDelta } from './money.ts';
 
 export type CanalReglement = 'DRY_RUN' | 'B2B' | 'MOBILE';
 

@@ -8,7 +8,7 @@
  * Logique pure : aucune I/O, aucune dépendance.
  */
 
-import { pctOf, ratioPct, subXofFloor0, sumXof, type XOF, ZERO_XOF } from './money';
+import { pctOf, ratioPct, subXofFloor0, sumXof, type XOF, ZERO_XOF } from './money.ts';
 
 export type NiveauEncours = 'NORMAL' | 'ALERTE' | 'BLOCAGE';
 

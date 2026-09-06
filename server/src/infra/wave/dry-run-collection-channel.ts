@@ -10,8 +10,8 @@ import type {
   CollectionChannel,
   CollectionOrder,
   CollectionResult,
-} from '../../ports/collection-channel';
-import type { HttpTransport } from './wave-client';
+} from '../../ports/collection-channel.ts';
+import type { HttpTransport } from './wave-client.ts';
 
 export const PREFIXE_DRY_RUN = 'DRYRUN-';
 

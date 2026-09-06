@@ -11,16 +11,16 @@
  *     l'écart entre le payé et le bon.
  */
 
-import type { XOF } from '../domain/money';
-import { emitVoucher, type FuelVoucher } from '../domain/fuel-voucher';
-import type { VoucherSigner } from '../infra/security/voucher-signature';
+import type { XOF } from '../domain/money.ts';
+import { emitVoucher, type FuelVoucher } from '../domain/fuel-voucher.ts';
+import type { VoucherSigner } from '../infra/security/voucher-signature.ts';
 import type {
   DriverPaymentRepository,
   DriverRepository,
   IdGenerator,
   VoucherDeliveryQueue,
   VoucherRepository,
-} from '../ports/repositories';
+} from '../ports/repositories.ts';
 
 export class EmissionRefuseeError extends Error {
   constructor(message: string) {

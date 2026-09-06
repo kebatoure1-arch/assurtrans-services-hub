@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { xof } from '../src/domain/money';
-import { reconcile, type ReconInput } from '../src/domain/reconciliation';
+import { xof } from '../src/domain/money.ts';
+import { reconcile, type ReconInput } from '../src/domain/reconciliation.ts';
 
 const base: ReconInput = {
   periode: '2026-08-31',

@@ -10,8 +10,8 @@
  *    face à deux pompistes qui scannent au même instant.
  */
 
-import type { XOF } from '../domain/money';
-import type { FuelVoucher, VoucherStatut } from '../domain/fuel-voucher';
+import type { XOF } from '../domain/money.ts';
+import type { FuelVoucher, VoucherStatut } from '../domain/fuel-voucher.ts';
 
 export interface DriverPayment {
   readonly id: string;
@@ -67,6 +67,27 @@ export interface DeliveryRequest {
  */
 export interface VoucherDeliveryQueue {
   enqueue(demande: DeliveryRequest): Promise<string>;
+}
+
+export interface CheckoutSession {
+  readonly reference: string;
+  readonly driverId: string;
+  readonly montant: XOF;
+  readonly canal: string;
+  readonly sessionId: string | null;
+}
+
+/**
+ * Sessions de paiement ouvertes.
+ *
+ * Le webhook de confirmation ne transporte que notre référence. C'est ici qu'on retrouve à qui
+ * elle appartient et quel montant avait été demandé — le second sert à refuser un webhook qui
+ * annoncerait autre chose.
+ */
+export interface CheckoutSessionRepository {
+  findByReference(reference: string): Promise<CheckoutSession | null>;
+  save(session: CheckoutSession): Promise<void>;
+  attacherSessionId(reference: string, sessionId: string): Promise<void>;
 }
 
 /** Génération d'identifiants. Injectée pour que les tests soient déterministes. */

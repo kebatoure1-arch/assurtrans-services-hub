@@ -17,7 +17,7 @@
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { Secret } from '../secrets/secrets';
+import type { Secret } from '../secrets/secrets.ts';
 
 const PREFIXE = 'AT1';
 

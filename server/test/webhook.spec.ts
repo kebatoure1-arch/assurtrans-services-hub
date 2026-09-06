@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { Secret } from '../src/infra/secrets/secrets';
+import { Secret } from '../src/infra/secrets/secrets.ts';
 import {
   InMemoryProcessedEventStore,
   InvalidWebhookSignatureError,
@@ -8,8 +8,8 @@ import {
   TimestampOutOfWindowError,
   WebhookDeduplicator,
   WebhookVerifier,
-} from '../src/infra/webhooks/webhook';
-import { EndpointContractUnknownError } from '../src/infra/wave/wave-client';
+} from '../src/infra/webhooks/webhook.ts';
+import { EndpointContractUnknownError } from '../src/infra/wave/wave-client.ts';
 
 const SECRET = new Secret('c'.repeat(48), 'WAVE_WEBHOOK_SECRET');
 const HEADER = 'wave-signature';
