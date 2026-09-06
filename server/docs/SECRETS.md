@@ -7,7 +7,8 @@ le JavaScript envoyé au navigateur. Une clé placée dans une variable `VITE_*`
 « configurée » : elle est **publiée**.
 
 L'audit initial a relevé **22 constats bloquants** : 13 variables de secret dans `.env.example`
-et 9 lectures effectives dans le code du front.
+et 9 lectures effectives dans le code du front. Après nettoyage de `.env.example` puis retrait de
+l'héritage OLA ENERGY, il en reste **6**.
 
 Nuance importante, et bonne nouvelle : **aucune de ces variables n'était renseignée**. Les
 services concernés tournaient en mode simulation. Rien n'a fuité. Le risque était que
@@ -55,10 +56,10 @@ dans une interpolation, ni dans un `JSON.stringify` de la configuration complèt
 | `VITE_WAVE_API_KEY` | `WAVE_API_KEY` | ✅ fait | jamais utilisé par le front — rien à faire |
 | `VITE_WAVE_API_SECRET` | — | ✅ retiré | Wave n'utilise pas de secret pair |
 | `VITE_QR_SIGNATURE_SECRET` | `QR_SIGNATURE_SECRET` | ⬜ à migrer | `src/lib/qr-crypto.ts` → signature et vérification côté serveur |
-| `VITE_TPE_API_KEY` | `TPE_API_KEY` | ⬜ à migrer | `src/features/payments/services/tpe-service.ts` |
-| `VITE_TPE_API_SECRET` | `TPE_API_SECRET` | ⬜ à migrer | idem |
-| `VITE_TPE_MERCHANT_ID` | `TPE_MERCHANT_ID` | ⬜ à migrer | idem — absent de l'ancien `.env.example`, lu par le code |
-| `VITE_TPE_WEBHOOK_SECRET` | `TPE_WEBHOOK_SECRET` | ⬜ à migrer | `src/services/tpe-webhook-handler.ts` |
+| `VITE_TPE_API_KEY` | — | ✅ supprimé | intégration OLA ENERGY retirée le 2026-09-06 |
+| `VITE_TPE_API_SECRET` | — | ✅ supprimé | idem |
+| `VITE_TPE_MERCHANT_ID` | — | ✅ supprimé | idem |
+| `VITE_TPE_WEBHOOK_SECRET` | — | ✅ supprimé | `tpe-webhook-handler.ts` supprimé |
 | `VITE_RESEND_API_KEY` | `RESEND_API_KEY` | ⬜ à migrer | `src/services/email-receipt-service.ts` |
 | `VITE_TWILIO_ACCOUNT_SID` | `TWILIO_ACCOUNT_SID` | ⬜ à migrer | `src/services/sms-notification-service.ts` |
 | `VITE_TWILIO_AUTH_TOKEN` | `TWILIO_AUTH_TOKEN` | ⬜ à migrer | idem |
@@ -82,20 +83,11 @@ doit donc déplacer **la vérification**, pas seulement la génération.
 À faire : deux routes serveur (`POST /qr/sign`, `POST /qr/verify`), `qr-crypto.ts` devient un
 client HTTP, suppression du repli `dev-insecure-secret-…`.
 
-### 2. Webhook TPE
-
-Un webhook vérifié côté client n'est pas vérifié : rien n'empêche d'appeler directement l'API
-de données. La route doit être un endpoint serveur.
-
-### 3. Clés TPE
-
-Elles autorisent des débits carte. Le front doit demander au serveur d'initier la transaction.
-
-### 4. Resend, Twilio, Africa's Talking
+### 2. Resend, Twilio, Africa's Talking
 
 Impact financier (envoi à volonté aux frais de l'entité) plutôt que fraude directe.
 
-### 5. Orange Money / Free Money
+### 3. Orange Money / Free Money
 
 À trancher avec le sort du wallet client — voir la section « Constat sur l'existant » de
 l'ADR-001. Si le wallet disparaît, ces clés disparaissent avec.

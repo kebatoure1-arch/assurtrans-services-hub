@@ -42,9 +42,6 @@ import QRScanGuide from '@/pages/QRScanGuide';
 import UnauthorizedPage from '@/pages/UnauthorizedPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 
-// TPE Features
-import TPETerminalPage from '@/pages/TPETerminalPage';
-
 function App() {
   const { checkAuth, isAuthenticated } = useAuthStore();
 
@@ -275,18 +272,6 @@ function App() {
             element={
               <RequireRole allowedRoles={['admin', 'station_operator']}>
                 <QRScanGuide />
-              </RequireRole>
-            }
-          />
-
-          {/* ==================== TPE FEATURES ==================== */}
-
-          {/* TPE Terminal - Station operators */}
-          <Route
-            path="/tpe"
-            element={
-              <RequireRole allowedRoles={['admin', 'station_operator']}>
-                <TPETerminalPage />
               </RequireRole>
             }
           />

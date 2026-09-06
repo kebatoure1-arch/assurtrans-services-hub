@@ -446,7 +446,7 @@ export async function generateTPETransactionReceiptPDF(
   pdf.setFontSize(10);
   pdf.setTextColor(COLORS.textLight);
   pdf.setFont('helvetica', 'normal');
-  pdf.text('OLA ENERGY Station', width / 2, yPos, { align: 'center' });
+  pdf.text('Station TotalEnergies', width / 2, yPos, { align: 'center' });
   yPos += 10;
 
   pdf.setDrawColor(COLORS.border);

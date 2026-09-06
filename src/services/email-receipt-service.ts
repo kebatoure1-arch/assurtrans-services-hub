@@ -454,7 +454,7 @@ export async function sendFuelOrderReceipt(
  *   {
  *     transactionId: 'TPE-2025-001',
  *     transactionDate: new Date(),
- *     stationName: 'OLA ENERGY Dakar',
+ *     stationName: 'TotalEnergies Dakar',
  *     stationAddress: '123 Avenue Blaise Diagne',
  *     terminalId: 'TPE-001',
  *     amount: 32500,

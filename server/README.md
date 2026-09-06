@@ -88,16 +88,17 @@ Ce qui a été fait :
 | Mesure | Effet |
 |---|---|
 | `.env.example` réécrit — configuration publique uniquement | plus personne ne peut renseigner un secret au mauvais endroit |
-| `server/.env.example` créé | les 14 secrets ont un emplacement serveur nommé |
+| `server/.env.example` créé | chaque secret conservé a un emplacement serveur nommé |
 | `.gitignore` créé | aucun `.env` n'entrera dans le dépôt |
 | `Secret` (`src/infra/secrets/`) | une valeur sensible ne peut plus être interpolée, sérialisée ni journalisée par accident |
 | `EnvSecretProvider` | refuse tout nom préfixé `VITE_`, sans repli |
 | `loadConfig()` | échoue au démarrage, pas au premier paiement |
 | Scan CI avec référence figée | la dette connue passe, toute régression échoue le build |
 
-Constats restants : **10**, tous du code front, tous listés avec leur ordre de migration dans
-`docs/SECRETS.md`. Ils n'ont pas été supprimés parce que les retirer aujourd'hui casserait le
-paiement TPE, la signature des QR et l'envoi de SMS sans rien remplacer.
+Constats restants : **6** (22 → 10 après nettoyage de `.env.example`, → 6 après retrait de
+l'héritage OLA ENERGY), tous du code front, tous listés avec leur ordre de migration dans
+`docs/SECRETS.md`. Ils n'ont pas été supprimés parce que les retirer aujourd'hui casserait la
+signature des QR et l'envoi de SMS sans rien remplacer.
 
 La clé Wave, elle, n'entre jamais dans ce périmètre : injectée au démarrage depuis KMS/Vault,
 portée par `Secret`, exposée à un seul endroit du système — la construction de l'en-tête
