@@ -9,7 +9,7 @@ depuis un portefeuille **Wave Business** détenu par l'entité.
 ```bash
 cd server
 npm install
-npm test          # 117 tests
+npm test          # 158 tests
 npm run typecheck
 npm run scan:secrets
 ```
@@ -130,18 +130,27 @@ server/
 │   │   ├── fuel-voucher.ts               Bon à usage unique : émission, consommation, annulation
 │   │   └── reconciliation.ts             Rapprochement à trois voies
 │   ├── config.ts                         Chargement au démarrage, échec immédiat si incomplet
+│   ├── application/
+│   │   ├── emit-voucher-on-payment.ts    Paiement confirmé → bon émis → QR mis en file
+│   │   └── redeem-voucher-at-station.ts  Scan du pompiste → consommation atomique
 │   ├── ports/
-│   │   └── settlement-channel.ts         Interface de sortie de fonds
+│   │   ├── settlement-channel.ts         Sortie de fonds — règlement TotalEnergies
+│   │   ├── collection-channel.ts         Entrée de fonds — paiement des chauffeurs
+│   │   └── repositories.ts               Persistance, écritures conditionnelles
 │   └── infra/
 │       ├── secrets/secrets.ts            Secret non journalisable, refus du préfixe VITE_
 │       ├── security/voucher-signature.ts Signature HMAC du QR, rotation de clé supportée
+│       ├── webhooks/webhook.ts           Signature, fenêtre d'horodatage, déduplication
 │       └── wave/
 │           ├── wave-client.ts            HTTP. Endpoints documentés uniquement.
 │           ├── payout-channels.ts        B2BPayoutChannel | MobilePayoutChannel
+│           ├── checkout-channel.ts       Encaissement — POST /v1/checkout/sessions
 │           ├── dry-run-channel.ts        Mode par défaut. Aucun appel réseau.
-│           └── resolve-channel.ts        Sélection par configuration
+│           ├── dry-run-collection-channel.ts
+│           ├── resolve-channel.ts        Sélection du canal de règlement
+│           └── resolve-collection.ts     Sélection du canal d'encaissement
 ├── scripts/scan-secrets.mjs              Scan CI (§11, item 1) + référence figée
-└── test/                                 117 tests
+└── test/                                 158 tests
 ```
 
 ### Garanties couvertes par les tests
@@ -172,6 +181,14 @@ server/
 | Un bon expiré ou annulé est refusé | `fuel-voucher.spec.ts` |
 | Un montant gonflé dans le QR invalide la signature | `voucher-signature.spec.ts` |
 | Une rotation de clé n'invalide pas les bons déjà envoyés | `voucher-signature.spec.ts` |
+| La signature de webhook porte sur les octets reçus, pas sur un JSON re-sérialisé | `webhook.spec.ts` |
+| Un horodatage hors fenêtre est rejeté même avec une signature valide | `webhook.spec.ts` |
+| 5 livraisons du même événement ⇒ 1 traitement ; un traitement échoué reste rejouable | `webhook.spec.ts` |
+| Rejouer 5 fois le même paiement n'émet qu'un seul bon | `use-cases.spec.ts` |
+| Un QR forgé est refusé sans toucher la base | `use-cases.spec.ts` |
+| Un montant divergent entre le QR et la base est refusé — la base fait foi | `use-cases.spec.ts` |
+| Deux pompistes simultanés : un seul sert | `use-cases.spec.ts` |
+| Le chauffeur garde son bon même si l'envoi WhatsApp échoue | `use-cases.spec.ts` |
 
 ### Séparation des rôles
 
@@ -192,14 +209,14 @@ Deux règles sont codées, l'une exigée par le cahier des charges, l'autre ajou
 
 Dans l'ordre où cela devrait être fait :
 
-1. Couche de persistance (repositories Postgres) et transactions.
-2. `Scheduler` : jobs at-least-once, verrou d'exclusion via `job_locks`, génération d'intention à
-   J-n de l'échéance.
-3. `WebhookReceiver` : endpoint isolé, vérification HMAC, dédup via `webhook_events`, fenêtre
-   d'horodatage, rate limit.
+1. Couche de persistance : implémenter les ports de `repositories.ts` sur Postgres. Les deux
+   écritures conditionnelles (`saveIfNew`, `saveIfStatut`) deviennent des `INSERT ... ON CONFLICT`
+   et des `UPDATE ... WHERE statut = $attendu` — c'est là que se joue l'atomicité.
+2. API HTTP : encaissement, réception du webhook, écran pompiste, authentification et rôles.
+3. Envoi WhatsApp — **bloqué** : identifiants WhatsApp Business et modèle approuvé par Meta.
 4. `AuditLogger` branché sur `audit_events`.
-5. Import du relevé de consommation TE — **format à obtenir** (§14, paramètre 4).
-6. API HTTP + authentification + rôles.
+5. `Scheduler` : jobs at-least-once, verrou via `job_locks`, intention de règlement à J-n.
+6. Import du relevé de consommation TE — **format à obtenir** (§14, paramètre 4).
 7. PWA installable (manifest, service worker, file d'actions hors ligne, Web Push VAPID).
 8. Jeu d'enregistrements de réponses réelles en sandbox Wave.
 

@@ -8,6 +8,7 @@
 
 import { xof, type XOF } from './domain/money';
 import type { CanalReglement } from './domain/payment-intent';
+import type { CanalEncaissement } from './ports/collection-channel';
 import type { SecretProvider } from './infra/secrets/secrets';
 import type { WaveConfig } from './infra/wave/wave-client';
 
@@ -27,8 +28,13 @@ export interface PlafondsServeur {
 
 export interface AppConfig {
   readonly wave: WaveConfig;
+  /** Canal de sortie de fonds — règlement de TotalEnergies. */
   readonly canalParDefaut: CanalReglement;
+  /** Canal d'entrée de fonds — encaissement des chauffeurs. */
+  readonly canalEncaissement: CanalEncaissement;
   readonly plafonds: PlafondsServeur;
+  /** Durée de validité d'un bon carburant, en heures. */
+  readonly validiteBonHeures: number;
 }
 
 function requis(env: Record<string, string | undefined>, nom: string): string {
@@ -47,6 +53,24 @@ function montantRequis(env: Record<string, string | undefined>, nom: string): XO
     );
   }
   return xof(Number(brut));
+}
+
+function canalEncaissementRequis(env: Record<string, string | undefined>): CanalEncaissement {
+  const brut = requis(env, 'COLLECTION_CHANNEL');
+  if (brut !== 'DRY_RUN' && brut !== 'WAVE_CHECKOUT') {
+    throw new ConfigurationError(
+      `« COLLECTION_CHANNEL » doit valoir DRY_RUN ou WAVE_CHECKOUT (reçu « ${brut} »)`,
+    );
+  }
+  return brut;
+}
+
+function entierRequis(env: Record<string, string | undefined>, nom: string): number {
+  const brut = requis(env, nom);
+  if (!/^\d+$/.test(brut) || Number(brut) <= 0) {
+    throw new ConfigurationError(`« ${nom} » doit être un entier > 0 (reçu « ${brut} »)`);
+  }
+  return Number(brut);
 }
 
 function canalRequis(env: Record<string, string | undefined>): CanalReglement {
@@ -71,7 +95,9 @@ export async function loadConfig(
   env: Record<string, string | undefined> = process.env,
 ): Promise<AppConfig> {
   const canalParDefaut = canalRequis(env);
+  const canalEncaissement = canalEncaissementRequis(env);
   const payoutReferenceField = env.WAVE_PAYOUT_REFERENCE_FIELD?.trim() ?? '';
+  const checkoutLaunchUrlField = env.WAVE_CHECKOUT_LAUNCH_URL_FIELD?.trim() ?? '';
 
   if (canalParDefaut !== 'DRY_RUN' && payoutReferenceField === '') {
     throw new ConfigurationError(
@@ -81,12 +107,22 @@ export async function loadConfig(
     );
   }
 
+  if (canalEncaissement === 'WAVE_CHECKOUT' && checkoutLaunchUrlField === '') {
+    throw new ConfigurationError(
+      'encaissement WAVE_CHECKOUT demandé sans WAVE_CHECKOUT_LAUNCH_URL_FIELD : la session ' +
+        'serait ouverte sans savoir où renvoyer le chauffeur pour payer.',
+    );
+  }
+
   return {
     canalParDefaut,
+    canalEncaissement,
+    validiteBonHeures: entierRequis(env, 'VALIDITE_BON_HEURES'),
     wave: {
       baseUrl: env.WAVE_BASE_URL?.trim() || 'https://api.wave.com',
       apiKey: await secrets.get('WAVE_API_KEY'),
       payoutReferenceField,
+      checkoutLaunchUrlField,
     },
     plafonds: {
       maxUnitaireXof: montantRequis(env, 'PLAFOND_UNITAIRE_XOF'),

@@ -27,6 +27,7 @@ const CONFIG_WAVE = {
   baseUrl: 'https://api.wave.com',
   apiKey: new Secret('wave_sn_prod_TEST', 'WAVE_API_KEY'),
   payoutReferenceField: 'client_reference',
+  checkoutLaunchUrlField: 'wave_launch_url',
 };
 
 describe('DryRunChannel — mode par défaut tant que §14 n’est pas levé', () => {

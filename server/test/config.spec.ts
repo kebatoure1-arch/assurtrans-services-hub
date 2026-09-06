@@ -6,6 +6,8 @@ const secrets = new EnvSecretProvider({ WAVE_API_KEY: 'wave_sn_prod_XYZ123456' }
 
 const ENV_MINIMAL = {
   SETTLEMENT_CHANNEL: 'DRY_RUN',
+  COLLECTION_CHANNEL: 'DRY_RUN',
+  VALIDITE_BON_HEURES: '24',
   PLAFOND_UNITAIRE_XOF: '10000000',
   PLAFOND_QUOTIDIEN_XOF: '20000000',
 };
@@ -49,6 +51,27 @@ describe('loadConfig — échouer au démarrage, pas au premier paiement', () =>
       WAVE_PAYOUT_REFERENCE_FIELD: 'client_reference',
     });
     expect(c.canalParDefaut).toBe('B2B');
+  });
+
+  it('refuse un encaissement WAVE_CHECKOUT sans champ d’URL de paiement', async () => {
+    await expect(
+      loadConfig(secrets, { ...ENV_MINIMAL, COLLECTION_CHANNEL: 'WAVE_CHECKOUT' }),
+    ).rejects.toThrow(/où renvoyer le chauffeur/);
+  });
+
+  it('accepte WAVE_CHECKOUT dès que le champ d’URL est renseigné', async () => {
+    const c = await loadConfig(secrets, {
+      ...ENV_MINIMAL,
+      COLLECTION_CHANNEL: 'WAVE_CHECKOUT',
+      WAVE_CHECKOUT_LAUNCH_URL_FIELD: 'wave_launch_url',
+    });
+    expect(c.canalEncaissement).toBe('WAVE_CHECKOUT');
+  });
+
+  it('refuse une validité de bon absente ou nulle', async () => {
+    await expect(
+      loadConfig(secrets, { ...ENV_MINIMAL, VALIDITE_BON_HEURES: '0' }),
+    ).rejects.toThrow(/VALIDITE_BON_HEURES/);
   });
 
   it('refuse un plafond absent — pas de valeur de repli sur un montant', async () => {

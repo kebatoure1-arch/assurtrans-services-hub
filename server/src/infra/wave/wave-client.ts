@@ -43,6 +43,12 @@ export interface WaveConfig {
    * Vide ⇒ le canal refuse d'exécuter plutôt que de deviner.
    */
   readonly payoutReferenceField: string;
+  /**
+   * Nom du champ de la réponse de session Checkout qui porte l'URL de paiement à présenter au
+   * chauffeur. À renseigner d'après la documentation Wave en vigueur.
+   * Vide ⇒ le canal d'encaissement refuse d'ouvrir une session plutôt que de deviner.
+   */
+  readonly checkoutLaunchUrlField: string;
 }
 
 export class EndpointContractUnknownError extends Error {
@@ -61,6 +67,16 @@ export class WaveTransportError extends Error {
     this.name = 'WaveTransportError';
   }
 }
+
+export interface CheckoutSessionRequest {
+  readonly idempotencyKey: string;
+  readonly payload: Record<string, unknown>;
+}
+
+export type CheckoutOutcome =
+  | { readonly kind: 'CREATED'; readonly sessionId: string; readonly body: unknown }
+  | { readonly kind: 'REJECTED'; readonly motif: string }
+  | { readonly kind: 'AMBIGUOUS'; readonly motif: string };
 
 export interface PayoutRequest {
   readonly path: '/v1/payout' | '/v1/b2b/payout';
@@ -135,6 +151,50 @@ export class WaveClient {
       return {
         kind: 'AMBIGUOUS',
         motif: `réponse ${reponse.status} du fournisseur : sort de l'ordre indéterminé`,
+      };
+    }
+
+    return { kind: 'REJECTED', motif: `réponse ${reponse.status} : ${messageErreur(reponse.body)}` };
+  }
+
+  /**
+   * Ouvre une session Checkout — encaissement d'un payeur vers le portefeuille.
+   *
+   * Cet endpoint **ne paye personne**. Il ne peut pas régler TotalEnergies ni aucun code
+   * marchand. Le règlement passe exclusivement par `postPayout`.
+   *
+   * Une seule tentative, comme pour un payout : ouvrir deux sessions pour un même paiement
+   * exposerait le chauffeur à payer deux fois.
+   */
+  async postCheckoutSession(req: CheckoutSessionRequest): Promise<CheckoutOutcome> {
+    let reponse: HttpResponse;
+    try {
+      reponse = await this.transport({
+        method: 'POST',
+        path: '/v1/checkout/sessions',
+        headers: this.headers({ 'Idempotency-Key': req.idempotencyKey }),
+        body: req.payload,
+      });
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : 'erreur de transport';
+      return { kind: 'AMBIGUOUS', motif: `appel sortant sans réponse exploitable : ${detail}` };
+    }
+
+    if (reponse.status >= 200 && reponse.status < 300) {
+      const sessionId = extraitId(reponse.body);
+      if (sessionId === null) {
+        return {
+          kind: 'AMBIGUOUS',
+          motif: `réponse ${reponse.status} sans identifiant de session exploitable`,
+        };
+      }
+      return { kind: 'CREATED', sessionId, body: reponse.body };
+    }
+
+    if (reponse.status >= 500) {
+      return {
+        kind: 'AMBIGUOUS',
+        motif: `réponse ${reponse.status} du fournisseur : sort de la session indéterminé`,
       };
     }
 
