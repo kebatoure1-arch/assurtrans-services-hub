@@ -15,11 +15,14 @@
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down -v",
     "migrate": "node scripts/migrate.mjs",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "demo": "tsc -p tsconfig.build.json && node dist/demo/demo-server.js"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
     "@types/pg": "^8.23.1",
+    "@types/qrcode": "^1.5.6",
+    "qrcode": "^1.5.4",
     "typescript": "~5.7.2",
     "vitest": "^2.1.9"
   },
