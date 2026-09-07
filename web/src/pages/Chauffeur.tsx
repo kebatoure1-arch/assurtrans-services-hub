@@ -63,6 +63,22 @@ function Ticket({ bon }: { bon: Bon }) {
           </>
         )}
 
+        {/*
+          Le serveur n'accompagne d'un jeton que les bons encore utilisables. Un bon qu'il juge
+          hors délai arrive donc sans jeton, alors que l'horloge du téléphone peut le croire
+          encore valable — les horloges dérivent. Sans ce cas, le ticket resterait muet : un
+          montant, et rien sous la perforation.
+        */}
+        {bon.statut === 'EMIS' && !expire && bon.jeton === null && (
+          <p style={{ margin: '18px 0 0' }}>
+            <span className="bandeau-statut annule">Code indisponible</span>
+            <br />
+            <span className="peremption">
+              Ce bon n’est plus affichable. Actualisez ; s’il ne revient pas, il a expiré.
+            </span>
+          </p>
+        )}
+
         {bon.statut === 'CONSOMME' && (
           <p style={{ margin: '18px 0 0' }}>
             <span className="bandeau-statut consomme">Servi</span>

@@ -53,5 +53,8 @@ jobs:
       - name: Installer les dépendances
         run: npm ci
 
+      - name: Tests d'interface
+        run: npm test
+
       - name: Build frontend
         run: npm run build
