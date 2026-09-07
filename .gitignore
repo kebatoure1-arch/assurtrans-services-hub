@@ -23,7 +23,10 @@ coverage/
 *.key
 *.p12
 *.pfx
-secrets/
+# Ancre a la racine : sans le « / » initial, ce motif exclurait aussi tout dossier
+# nomme « secrets » dans le code source — ce qui est arrive a
+# server/src/infra/secrets/, reste absent du depot jusqu'au 2026-09-07.
+/secrets/
 .vault-token
 
 # Éditeurs
