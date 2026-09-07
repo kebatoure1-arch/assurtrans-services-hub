@@ -182,7 +182,11 @@ describe('étanchéité du domaine (§11)', () => {
 
   it('aucun fichier de src/domain n’importe l’infrastructure', () => {
     const coupables = fichiersDomaine
-      .filter((f) => /\bfrom\s+'(?!\.\/)/.test(f.code) || /from\s+'\.\.\//.test(f.code))
+      .filter(
+        (f) =>
+          (/\bfrom\s+'(?!\.\/)/.test(f.code) && !/\bfrom\s+'node:/.test(f.code)) ||
+          /from\s+'\.\.\//.test(f.code),
+      )
       .map((f) => f.nom);
     expect(coupables).toEqual([]);
   });

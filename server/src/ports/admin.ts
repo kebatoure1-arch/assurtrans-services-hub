@@ -31,14 +31,22 @@ export interface FicheOperateur {
   readonly statut: StatutFiche;
 }
 
+export interface FicheEntite {
+  readonly id: string;
+  readonly raisonSociale: string;
+  readonly ninea: string | null;
+  readonly rccm: string | null;
+}
+
 export interface DirectoryRepository {
+  creerEntite(fiche: FicheEntite): Promise<void>;
   listerChauffeurs(): Promise<readonly FicheChauffeur[]>;
   listerStations(): Promise<readonly FicheStation[]>;
   listerOperateurs(): Promise<readonly FicheOperateur[]>;
   /** Un numéro n'appartient qu'à une seule personne, chauffeurs et opérateurs confondus. */
   numeroLibre(msisdn: string): Promise<boolean>;
   trouverStation(id: string): Promise<FicheStation | null>;
-  creerChauffeur(fiche: FicheChauffeur): Promise<void>;
+  creerChauffeur(fiche: FicheChauffeur, entityId: string): Promise<void>;
   creerStation(fiche: FicheStation): Promise<void>;
   creerOperateur(fiche: FicheOperateur): Promise<void>;
   /** `false` si la fiche n'existe pas : l'appelant doit le signaler, pas l'ignorer. */

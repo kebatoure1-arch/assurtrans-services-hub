@@ -30,6 +30,14 @@ import {
   PgVoucherDeliveryQueue,
   PgVoucherRepository,
 } from './infra/db/pg-repositories.ts';
+import {
+  PgContratRepository,
+  PgDirectoryRepository,
+  PgPilotageRepository,
+} from './infra/db/pg-admin.ts';
+import { ManageDirectory } from './application/admin/manage-directory.ts';
+import { TableauDeBord } from './application/admin/tableau-de-bord.ts';
+import { PgAuditLogger } from './infra/audit/audit-logger.ts';
 import { CachingSecretProvider, EnvSecretProvider } from './infra/secrets/secrets.ts';
 import { VoucherSigner } from './infra/security/voucher-signature.ts';
 import { WebhookDeduplicator, WebhookVerifier } from './infra/webhooks/webhook.ts';
@@ -123,6 +131,20 @@ async function main(): Promise<void> {
       ids: uuid,
       otp: config.otp,
       sessionDureeHeures: config.sessionDureeHeures,
+    }),
+    audit: new PgAuditLogger(db),
+    referentiel: new ManageDirectory({
+      annuaire: new PgDirectoryRepository(db),
+      audit: new PgAuditLogger(db),
+      ids: uuid,
+      entityId: config.entityId,
+    }),
+    tableauDeBord: new TableauDeBord({
+      contrats: new PgContratRepository(db),
+      pilotage: new PgPilotageRepository(db),
+      horloge: () => new Date().toISOString(),
+      entityId: config.entityId,
+      fenetreJours: config.fenetreConsommationJours,
     }),
   });
 

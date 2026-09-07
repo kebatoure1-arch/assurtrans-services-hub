@@ -60,6 +60,13 @@ export interface AppConfig {
   readonly sessionDureeHeures: number;
   /** Origines autorisees pour le front. Liste explicite, pas de joker. */
   readonly originesAutorisees: readonly string[];
+  /**
+   * Entite exploitee par ce deploiement. Vide tant qu'elle n'a pas ete creee : c'est la
+   * situation normale au premier demarrage, l'entite se cree ensuite par l'API.
+   */
+  readonly entityId: string;
+  /** Fenetre d'observation de la consommation, en jours. Sert au calcul du rythme. */
+  readonly fenetreConsommationJours: number;
 }
 
 function requis(env: Record<string, string | undefined>, nom: string): string {
@@ -193,6 +200,9 @@ export async function loadConfig(
       senderId: env.AFRICAS_TALKING_SENDER_ID?.trim() || null,
     },
     sessionDureeHeures: entierRequis(env, 'SESSION_DUREE_HEURES'),
+    entityId: env.ENTITY_ID?.trim() ?? '',
+    // 30 jours : une valeur d'observation, pas un montant. Un defaut y est acceptable.
+    fenetreConsommationJours: Number(env.FENETRE_CONSOMMATION_JOURS ?? '30') || 30,
     originesAutorisees: (env.ORIGINES_AUTORISEES ?? '')
       .split(',')
       .map((o) => o.trim())

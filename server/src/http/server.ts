@@ -44,6 +44,13 @@ import type {
 } from '../ports/repositories.ts';
 import type { CheckoutCompletedMapper } from './checkout-mapper.ts';
 import {
+  ManageDirectory,
+  NumeroDejaUtiliseError,
+  ReferentielRefuseError,
+} from '../application/admin/manage-directory.ts';
+import type { TableauDeBord } from '../application/admin/tableau-de-bord.ts';
+import type { AuditLogger } from '../ports/audit.ts';
+import {
   AuthenticateByPhone,
   AuthentificationRefuseeError,
   TropDeDemandesError,
@@ -69,6 +76,14 @@ export interface ServerDeps {
   readonly signer: VoucherSigner;
   /** Origines autorisees pour le front. Vide = aucune requete inter-origine acceptee. */
   readonly originesAutorisees: readonly string[];
+  /**
+   * Referentiel et pilotage. Optionnels : le harnais de demonstration tourne sans base, et
+   * l'API repond alors 503 sur les routes d'administration plutot que d'echouer au demarrage.
+   */
+  readonly referentiel?: ManageDirectory;
+  readonly tableauDeBord?: TableauDeBord;
+  /** Trace des actions sensibles hors referentiel : encaissement, consommation. */
+  readonly audit?: AuditLogger;
 }
 
 declare module 'fastify' {
@@ -94,6 +109,38 @@ const CorpsSession2 = z.object({
 const CorpsConsommation = z.object({
   token: z.string().min(1).max(4096),
   redemptionId: z.string().min(1).max(128),
+});
+
+const CorpsNouveauChauffeur = z.object({
+  // Une seule entite en Beta : celle du deploiement. Le champ reste accepte pour le jour ou
+  // Assur'Trans exploitera plusieurs comptes TotalEnergies.
+  entityId: z.string().uuid().optional(),
+  nom: z.string().trim().min(1).max(160),
+  telephone: z.string().min(6).max(24),
+});
+
+const CorpsChangementStatut = z.object({
+  statut: z.enum(['ACTIF', 'SUSPENDU']),
+  motif: z.string().trim().min(1).max(280),
+});
+
+const CorpsNouvelleEntite = z.object({
+  raisonSociale: z.string().trim().min(1).max(200),
+  ninea: z.string().trim().max(80).nullable().optional(),
+  rccm: z.string().trim().max(80).nullable().optional(),
+});
+
+const CorpsNouvelleStation = z.object({
+  code: z.string().trim().min(1).max(64),
+  nom: z.string().trim().min(1).max(160),
+  ville: z.string().trim().max(160).nullable().optional(),
+});
+
+const CorpsNouvelOperateur = z.object({
+  nom: z.string().trim().min(1).max(160),
+  telephone: z.string().min(6).max(24),
+  role: z.enum(['STATION_OPERATOR', 'ADMIN']),
+  stationId: z.string().uuid().nullable().optional(),
 });
 
 function erreur(reply: FastifyReply, code: number, message: string): FastifyReply {
@@ -220,6 +267,173 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return reply.send(principal);
   });
 
+  // ------------------------------------------------------------- administration
+
+  /**
+   * Toutes les routes d'administration passent par `ManageDirectory`.
+   *
+   * Les regles metier — unicite d'un numero tous roles confondus, station verifiee, motif
+   * obligatoire pour un changement de statut — et la trace d'audit y vivent en un seul endroit.
+   * Les rejouer dans chaque gestionnaire de route finirait par les faire diverger.
+   */
+  function refusReferentiel(reply: FastifyReply, cause: unknown): FastifyReply | null {
+    if (cause instanceof NumeroDejaUtiliseError) return erreur(reply, 409, cause.message);
+    if (cause instanceof ReferentielRefuseError) return erreur(reply, 400, cause.message);
+    if (cause instanceof Error && cause.message.includes('inexploitable')) {
+      return erreur(reply, 400, 'numero de telephone invalide');
+    }
+    if (cause instanceof Error && cause.message.includes('duplicate key')) {
+      return erreur(reply, 409, 'fiche deja existante');
+    }
+    return null;
+  }
+
+  async function avecReferentiel<T>(
+    reply: FastifyReply,
+    bloc: (referentiel: ManageDirectory) => Promise<T>,
+  ): Promise<T | FastifyReply> {
+    if (deps.referentiel === undefined) {
+      return erreur(reply, 503, 'referentiel indisponible');
+    }
+    try {
+      return await bloc(deps.referentiel);
+    } catch (cause) {
+      const refus = refusReferentiel(reply, cause);
+      if (refus !== null) return refus;
+      throw cause;
+    }
+  }
+
+  app.get('/api/admin/tableau-de-bord', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    if (deps.tableauDeBord === undefined) return erreur(reply, 503, 'pilotage indisponible');
+    return reply.send(await deps.tableauDeBord.etat());
+  });
+
+  app.post('/api/admin/entities', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+
+    const corps = CorpsNouvelleEntite.safeParse(req.body);
+    if (!corps.success) return erreur(reply, 400, 'raison sociale attendue');
+
+    return avecReferentiel(reply, async (referentiel) => {
+      const entite = await referentiel.creerEntite(
+        { raisonSociale: corps.data.raisonSociale, ninea: corps.data.ninea, rccm: corps.data.rccm },
+        principal.subject,
+      );
+      return reply.code(201).send(entite);
+    });
+  });
+
+  app.get('/api/admin/drivers', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    return avecReferentiel(reply, async (r) => reply.send(await r.listerChauffeurs()));
+  });
+
+  app.post('/api/admin/drivers', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+
+    const corps = CorpsNouveauChauffeur.safeParse(req.body);
+    if (!corps.success) return erreur(reply, 400, 'nom et telephone attendus');
+
+    return avecReferentiel(reply, async (referentiel) => {
+      const chauffeur = await referentiel.creerChauffeur(
+        { nom: corps.data.nom, telephone: corps.data.telephone, entityId: corps.data.entityId },
+        principal.subject,
+      );
+      return reply.code(201).send(chauffeur);
+    });
+  });
+
+  app.post<{ Params: { id: string } }>('/api/admin/drivers/:id/statut', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+
+    const corps = CorpsChangementStatut.safeParse(req.body);
+    if (!corps.success) return erreur(reply, 400, 'statut et motif attendus');
+
+    return avecReferentiel(reply, async (referentiel) => {
+      await referentiel.changerStatutChauffeur(
+        req.params.id,
+        corps.data.statut,
+        principal.subject,
+        corps.data.motif,
+      );
+      return reply.code(200).send({ id: req.params.id, statut: corps.data.statut });
+    });
+  });
+
+  app.get('/api/admin/stations', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    return avecReferentiel(reply, async (r) => reply.send(await r.listerStations()));
+  });
+
+  app.post('/api/admin/stations', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+
+    const corps = CorpsNouvelleStation.safeParse(req.body);
+    if (!corps.success) return erreur(reply, 400, 'code et nom de station attendus');
+
+    return avecReferentiel(reply, async (referentiel) => {
+      const station = await referentiel.creerStation(
+        { code: corps.data.code, nom: corps.data.nom, ville: corps.data.ville ?? undefined },
+        principal.subject,
+      );
+      return reply.code(201).send(station);
+    });
+  });
+
+  app.get('/api/admin/operators', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    return avecReferentiel(reply, async (r) => reply.send(await r.listerOperateurs()));
+  });
+
+  app.post('/api/admin/operators', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+
+    const corps = CorpsNouvelOperateur.safeParse(req.body);
+    if (!corps.success) return erreur(reply, 400, 'nom, telephone et role attendus');
+
+    return avecReferentiel(reply, async (referentiel) => {
+      const operateur = await referentiel.creerOperateur(
+        {
+          nom: corps.data.nom,
+          telephone: corps.data.telephone,
+          role: corps.data.role,
+          stationId: corps.data.stationId ?? null,
+        },
+        principal.subject,
+      );
+      return reply.code(201).send(operateur);
+    });
+  });
+
+  app.post<{ Params: { id: string } }>('/api/admin/operators/:id/statut', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+
+    const corps = CorpsChangementStatut.safeParse(req.body);
+    if (!corps.success) return erreur(reply, 400, 'statut et motif attendus');
+
+    return avecReferentiel(reply, async (referentiel) => {
+      await referentiel.changerStatutOperateur(
+        req.params.id,
+        corps.data.statut,
+        principal.subject,
+        corps.data.motif,
+      );
+      return reply.code(200).send({ id: req.params.id, statut: corps.data.statut });
+    });
+  });
+
   // ------------------------------------------------------------- encaissement
 
   app.post('/api/paiements/session', async (req, reply) => {
@@ -269,6 +483,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
 
     await deps.sessions.attacherSessionId(reference, resultat.sessionId);
+    await deps.audit?.enregistrer({
+      actor: principal.subject,
+      action: 'PAYMENT_SESSION_CREATED',
+      targetType: 'checkout_session',
+      targetId: reference,
+      payload: { montantXof: montant, canal: deps.encaissement.canal },
+    });
     return reply.code(201).send({ reference, urlPaiement: resultat.launchUrl, montantXof: montant });
   });
 
@@ -362,6 +583,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         operateurId: principal.subject,
         redemptionId: corps.data.redemptionId,
         asOf: deps.horloge(),
+      });
+      await deps.audit?.enregistrer({
+        actor: principal.subject,
+        action: r.servi ? 'VOUCHER_REDEEMED' : 'VOUCHER_REDEEM_REPLAYED',
+        targetType: 'fuel_voucher',
+        targetId: r.voucherId,
+        payload: { stationId: principal.stationId, redemptionId: corps.data.redemptionId },
       });
       return reply.code(200).send({
         servir: true,

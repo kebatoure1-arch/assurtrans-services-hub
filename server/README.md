@@ -42,6 +42,10 @@ MissingSecretError : secret WAVE_API_KEY absent ou vide : aucun repli n'est prev
 | Route | Role | Effet |
 |---|---|---|
 | `GET /health` | public | etat du service |
+| `POST /api/admin/entities` | `ADMIN` | crée une entité de rattachement |
+| `POST /api/admin/drivers` | `ADMIN` | crée un chauffeur |
+| `POST /api/admin/stations` | `ADMIN` | crée une station |
+| `POST /api/admin/operators` | `ADMIN` | crée un pompiste ou un administrateur |
 | `POST /api/paiements/session` | `DRIVER`, `ADMIN` | ouvre une session de paiement, rend l'URL a presenter au chauffeur |
 | `POST /webhooks/wave` | signature HMAC | confirme un paiement, emet le bon, met le QR en file |
 | `POST /api/station/consommation` | `STATION_OPERATOR` | consomme un bon, rend le montant a servir |
@@ -58,6 +62,10 @@ les ecrit pas explicitement :
   montant different de celui demande n'emet aucun bon et remonte en 422.
 
 Un bon qui ne regarde pas le demandeur rend 404, pas 403 : on ne confirme pas son existence.
+
+Les créations administratives, les ouvertures de paiement et les consommations de bons écrivent un
+événement dans `audit_events`. Le payload n'est pas conservé : seule son empreinte SHA-256 est
+écrite, conformément à la règle append-only de la première migration.
 
 ---
 

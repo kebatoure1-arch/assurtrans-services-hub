@@ -44,6 +44,20 @@ import type {
 } from '../ports/authentication.ts';
 import type { OtpChallenge } from '../domain/otp.ts';
 import { buildServer } from '../http/server.ts';
+import { ManageDirectory } from '../application/admin/manage-directory.ts';
+import { TableauDeBord } from '../application/admin/tableau-de-bord.ts';
+import { InMemoryAuditLogger } from '../infra/audit/audit-logger.ts';
+import type {
+  ContratRepository,
+  ContratTe,
+  DirectoryRepository,
+  FicheChauffeur,
+  FicheEntite,
+  FicheOperateur,
+  FicheStation,
+  PilotageRepository,
+  StatutFiche,
+} from '../ports/admin.ts';
 import type {
   CheckoutSession,
   CheckoutSessionRepository,
@@ -190,6 +204,9 @@ const annuaireDemo: AnnuaireComptes = {
     if (msisdn === '+221770000002') {
       return { subject: 'pompiste-demo', role: 'STATION_OPERATOR', stationId: 'station-demo' };
     }
+    if (msisdn === '+221770000003') {
+      return { subject: 'admin-demo', role: 'ADMIN', stationId: null };
+    }
     return null;
   },
 };
@@ -217,6 +234,145 @@ class SenderDemo implements OtpSender {
 
 const senderDemo = new SenderDemo();
 const challengesDemo = new ChallengesDemo();
+
+// --------------------------------------------------- referentiel et pilotage
+
+const ENTITE_DEMO = randomUUID();
+const STATION_DEMO = 'station-demo';
+
+class AnnuaireDemo implements DirectoryRepository {
+  readonly entites: FicheEntite[] = [];
+  readonly chauffeurs: FicheChauffeur[] = [
+    { id: CHAUFFEUR.id, nom: CHAUFFEUR.nom, msisdn: CHAUFFEUR.msisdn, statut: 'ACTIF' },
+  ];
+  readonly stations: FicheStation[] = [
+    { id: STATION_DEMO, code: 'DKR-03', nom: 'Dakar 3', ville: 'Dakar', statut: 'ACTIVE' },
+  ];
+  readonly operateurs: FicheOperateur[] = [
+    {
+      id: 'pompiste-demo',
+      nom: 'Fatou Sow',
+      msisdn: '+221770000002',
+      role: 'STATION_OPERATOR',
+      stationId: STATION_DEMO,
+      statut: 'ACTIF',
+    },
+    {
+      id: 'admin-demo',
+      nom: 'Awa Fall',
+      msisdn: '+221770000003',
+      role: 'ADMIN',
+      stationId: null,
+      statut: 'ACTIF',
+    },
+  ];
+
+  async listerChauffeurs() {
+    return this.chauffeurs;
+  }
+  async listerStations() {
+    return this.stations;
+  }
+  async listerOperateurs() {
+    return this.operateurs;
+  }
+  async numeroLibre(msisdn: string) {
+    return (
+      !this.chauffeurs.some((c) => c.msisdn === msisdn) &&
+      !this.operateurs.some((o) => o.msisdn === msisdn)
+    );
+  }
+  async trouverStation(id: string) {
+    return this.stations.find((st) => st.id === id) ?? null;
+  }
+  async creerEntite(f: FicheEntite) {
+    this.entites.push(f);
+  }
+  async creerChauffeur(f: FicheChauffeur) {
+    this.chauffeurs.push(f);
+  }
+  async creerStation(f: FicheStation) {
+    this.stations.push(f);
+  }
+  async creerOperateur(f: FicheOperateur) {
+    this.operateurs.push(f);
+  }
+  async changerStatutChauffeur(id: string, statut: StatutFiche) {
+    const i = this.chauffeurs.findIndex((c) => c.id === id);
+    if (i < 0) return false;
+    this.chauffeurs[i] = { ...this.chauffeurs[i], statut };
+    return true;
+  }
+  async changerStatutOperateur(id: string, statut: StatutFiche) {
+    const i = this.operateurs.findIndex((o) => o.id === id);
+    if (i < 0) return false;
+    this.operateurs[i] = { ...this.operateurs[i], statut };
+    return true;
+  }
+}
+
+const CONTRAT_DEMO: ContratTe = {
+  id: 'contrat-demo',
+  numeroCompte: 'TE-4471',
+  encoursAutorise: xof(10_000_000),
+  delaiReglementJours: 30,
+  seuilAlertePct: 70,
+  seuilBlocagePct: 90,
+  canalReglement: 'DRY_RUN',
+};
+
+const contratsDemo: ContratRepository = {
+  async courant() {
+    return CONTRAT_DEMO;
+  },
+};
+
+/** Les chiffres viennent des bons reellement emis et consommes en memoire. */
+const pilotageDemo: PilotageRepository = {
+  async consommationNonFacturee() {
+    return sommeBons((b) => b.statut === 'CONSOMME');
+  },
+  async consommationSurFenetre(_contractId, depuis) {
+    return sommeBons((b) => b.statut === 'CONSOMME' && (b.consommeA ?? '') >= depuis);
+  },
+  async bonsEnCirculation() {
+    return sommeBons((b) => b.statut === 'EMIS' && b.expireA > new Date().toISOString());
+  },
+  async facturesEchuesImpayees() {
+    return xof(0);
+  },
+  async activiteDuJour(depuis) {
+    const tous = [...bons.lignes.values()];
+    const emis = tous.filter((b) => b.emisA >= depuis);
+    const consommes = tous.filter((b) => (b.consommeA ?? '') >= depuis);
+    return {
+      bonsEmis: emis.length,
+      montantEmis: xof(emis.reduce((t, b) => t + b.montant, 0)),
+      bonsConsommes: consommes.length,
+      montantConsomme: xof(consommes.reduce((t, b) => t + b.montant, 0)),
+    };
+  },
+  async incidents() {
+    const echecs = file.envois.length === 0 ? 0 : 0;
+    return echecs === 0
+      ? []
+      : [
+          {
+            type: 'ENVOI_QR_ECHOUE',
+            gravite: 'ATTENTION' as const,
+            nombre: echecs,
+            libelle: 'QR non parvenus au chauffeur',
+          },
+        ];
+  },
+};
+
+function sommeBons(filtre: (b: FuelVoucher) => boolean) {
+  return xof([...bons.lignes.values()].filter(filtre).reduce((t, b) => t + b.montant, 0));
+}
+
+const auditDemo = new InMemoryAuditLogger();
+const referentielDemo = new AnnuaireDemo();
 
 // ------------------------------------------------------------------ montage
 
@@ -260,6 +416,20 @@ const app = buildServer({
   montantBon: { minXof: xof(1_000), maxXof: xof(200_000) },
   signer,
   originesAutorisees: ['http://localhost:5174', 'http://127.0.0.1:5174'],
+  audit: auditDemo,
+  referentiel: new ManageDirectory({
+    annuaire: referentielDemo,
+    audit: auditDemo,
+    ids: uuid,
+    entityId: ENTITE_DEMO,
+  }),
+  tableauDeBord: new TableauDeBord({
+    contrats: contratsDemo,
+    pilotage: pilotageDemo,
+    horloge: () => new Date().toISOString(),
+    entityId: ENTITE_DEMO,
+    fenetreJours: 30,
+  }),
   auth: new AuthenticateByPhone({
     challenges: challengesDemo,
     sender: senderDemo,

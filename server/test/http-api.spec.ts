@@ -14,6 +14,16 @@ import type { AccessTokenVerifier, Principal } from '../src/infra/auth/api-token
 import { EmitVoucherOnPayment } from '../src/application/emit-voucher-on-payment.ts';
 import { RedeemVoucherAtStation } from '../src/application/redeem-voucher-at-station.ts';
 import { CheckoutCompletedMapper } from '../src/http/checkout-mapper.ts';
+import { ManageDirectory } from '../src/application/admin/manage-directory.ts';
+import { InMemoryAuditLogger } from '../src/infra/audit/audit-logger.ts';
+import type {
+  DirectoryRepository,
+  FicheChauffeur,
+  FicheEntite,
+  FicheOperateur,
+  FicheStation,
+  StatutFiche,
+} from '../src/ports/admin.ts';
 import { AuthenticateByPhone } from '../src/application/authenticate-by-phone.ts';
 import type { OtpChallenge } from '../src/domain/otp.ts';
 import type {
@@ -160,6 +170,59 @@ class EmetteurTest implements ApiTokenIssuer {
   }
 }
 
+class AnnuaireTest implements DirectoryRepository {
+  readonly entites: FicheEntite[] = [];
+  readonly chauffeurs: FicheChauffeur[] = [];
+  readonly stations: FicheStation[] = [];
+  readonly operateurs: FicheOperateur[] = [];
+
+  async listerChauffeurs() {
+    return this.chauffeurs;
+  }
+  async listerStations() {
+    return this.stations;
+  }
+  async listerOperateurs() {
+    return this.operateurs;
+  }
+  async numeroLibre(msisdn: string) {
+    return (
+      !this.chauffeurs.some((c) => c.msisdn === msisdn) &&
+      !this.operateurs.some((o) => o.msisdn === msisdn)
+    );
+  }
+  async trouverStation(id: string) {
+    return this.stations.find((st) => st.id === id) ?? null;
+  }
+  async creerEntite(f: FicheEntite) {
+    this.entites.push(f);
+  }
+  async creerChauffeur(f: FicheChauffeur) {
+    this.chauffeurs.push(f);
+  }
+  async creerStation(f: FicheStation) {
+    this.stations.push(f);
+  }
+  async creerOperateur(f: FicheOperateur) {
+    this.operateurs.push(f);
+  }
+  async changerStatutChauffeur(id: string, statut: StatutFiche) {
+    const i = this.chauffeurs.findIndex((c) => c.id === id);
+    if (i < 0) return false;
+    this.chauffeurs[i] = { ...this.chauffeurs[i], statut };
+    return true;
+  }
+  async changerStatutOperateur(id: string, statut: StatutFiche) {
+    const i = this.operateurs.findIndex((o) => o.id === id);
+    if (i < 0) return false;
+    this.operateurs[i] = { ...this.operateurs[i], statut };
+    return true;
+  }
+}
+
+/** Le schema des routes exige des identifiants UUID : la doublure en produit de vrais. */
+const identifiants = { next: () => crypto.randomUUID() };
+
 function compteur(prefixe: string) {
   let n = 0;
   return { next: () => `${prefixe}-${(n += 1)}` };
@@ -203,6 +266,8 @@ let sessions: Sessions;
 let file: File;
 let challenges: ChallengesTest;
 let sender: SenderTest;
+let annuaire: AnnuaireTest;
+let audit: InMemoryAuditLogger;
 let app: FastifyInstance;
 
 function signerWebhook(corps: string, unix = Math.floor(Date.parse(MAINTENANT) / 1000)): string {
@@ -217,6 +282,8 @@ beforeEach(() => {
   file = new File();
   challenges = new ChallengesTest();
   sender = new SenderTest();
+  annuaire = new AnnuaireTest();
+  audit = new InMemoryAuditLogger();
 
   app = buildServer({
     encaissement: new DryRunCollectionChannel(async () => {
@@ -260,6 +327,13 @@ beforeEach(() => {
       ids: compteur('CHAL'),
       otp: { dureeSecondes: 300, maxTentatives: 5, maxDemandesParHeure: 3, echoCode: false },
       sessionDureeHeures: 12,
+    }),
+    audit,
+    referentiel: new ManageDirectory({
+      annuaire,
+      audit,
+      ids: identifiants,
+      entityId: crypto.randomUUID(),
     }),
   });
 });
@@ -562,5 +636,165 @@ describe('consultation d’un bon', () => {
     });
     // 404 et non 403 : on ne confirme pas l'existence d'un bon qui ne le regarde pas.
     expect(autrui.statusCode).toBe(404);
+  });
+});
+
+// --------------------------------------------------------------- administration
+
+describe('administration du référentiel', () => {
+  async function creerStation(code = 'DKR-01') {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/admin/stations',
+      headers: { authorization: 'Bearer jeton-admin' },
+      payload: { code, nom: 'Station Dakar', ville: 'Dakar' },
+    });
+    return r.json() as { id: string };
+  }
+
+  async function creerChauffeur(telephone = '77 000 00 09') {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/admin/drivers',
+      headers: { authorization: 'Bearer jeton-admin' },
+      payload: { nom: 'Awa Ndiaye', telephone },
+    });
+    return r;
+  }
+
+  it('crée une entité de rattachement', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/admin/entities',
+      headers: { authorization: 'Bearer jeton-admin' },
+      payload: { raisonSociale: 'AssurTrans Sénégal', ninea: 'SN123', rccm: null },
+    });
+
+    expect(r.statusCode).toBe(201);
+    expect(annuaire.entites[0].raisonSociale).toBe('AssurTrans Sénégal');
+    expect(audit.evenements[0].action).toBe('ENTITE_CREEE');
+  });
+
+  it('crée un chauffeur, normalise son numéro et trace la création', async () => {
+    const r = await creerChauffeur();
+
+    expect(r.statusCode).toBe(201);
+    expect(annuaire.chauffeurs[0]).toMatchObject({ msisdn: '+221770000009', statut: 'ACTIF' });
+    expect(audit.evenements[0]).toMatchObject({
+      actor: 'admin-1',
+      action: 'CHAUFFEUR_CREE',
+      targetType: 'driver',
+    });
+  });
+
+  it('refuse un numéro déjà porté par une autre fiche', async () => {
+    await creerChauffeur('770000009');
+    const doublon = await creerChauffeur('+221 77 000 00 09');
+
+    expect(doublon.statusCode).toBe(409);
+    expect(annuaire.chauffeurs).toHaveLength(1);
+  });
+
+  it('crée une station et un pompiste rattaché à cette station', async () => {
+    const station = await creerStation();
+    const operateur = await app.inject({
+      method: 'POST',
+      url: '/api/admin/operators',
+      headers: { authorization: 'Bearer jeton-admin' },
+      payload: {
+        nom: 'Pompiste Dakar',
+        telephone: '77 000 00 10',
+        role: 'STATION_OPERATOR',
+        stationId: station.id,
+      },
+    });
+
+    expect(operateur.statusCode).toBe(201);
+    expect(annuaire.operateurs[0].stationId).toBe(station.id);
+    expect(audit.evenements.map((e) => e.action)).toEqual(['STATION_CREEE', 'OPERATEUR_CREE']);
+  });
+
+  it('refuse un pompiste rattaché à une station inexistante', async () => {
+    // Sans ce contrôle, le pompiste servirait au nom d'une station qui n'existe pas, et son
+    // jeton porterait un rattachement que rien ne recoupe.
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/admin/operators',
+      headers: { authorization: 'Bearer jeton-admin' },
+      payload: {
+        nom: 'Pompiste fantôme',
+        telephone: '770000011',
+        role: 'STATION_OPERATOR',
+        stationId: '22222222-2222-4222-8222-222222222222',
+      },
+    });
+
+    expect(r.statusCode).toBe(400);
+    expect(annuaire.operateurs).toHaveLength(0);
+  });
+
+  it('liste les fiches existantes', async () => {
+    await creerStation('DKR-07');
+    const r = await app.inject({
+      method: 'GET',
+      url: '/api/admin/stations',
+      headers: { authorization: 'Bearer jeton-admin' },
+    });
+
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toHaveLength(1);
+    expect(r.json()[0].code).toBe('DKR-07');
+  });
+
+  it('suspend un chauffeur, avec motif obligatoire et trace', async () => {
+    const id = (await creerChauffeur()).json().id;
+
+    const sansMotif = await app.inject({
+      method: 'POST',
+      url: `/api/admin/drivers/${id}/statut`,
+      headers: { authorization: 'Bearer jeton-admin' },
+      payload: { statut: 'SUSPENDU', motif: '' },
+    });
+    expect(sansMotif.statusCode).toBe(400);
+
+    const avecMotif = await app.inject({
+      method: 'POST',
+      url: `/api/admin/drivers/${id}/statut`,
+      headers: { authorization: 'Bearer jeton-admin' },
+      payload: { statut: 'SUSPENDU', motif: 'impayé' },
+    });
+
+    expect(avecMotif.statusCode).toBe(200);
+    expect(annuaire.chauffeurs[0].statut).toBe('SUSPENDU');
+    expect(audit.evenements.at(-1)?.action).toBe('CHAUFFEUR_SUSPENDU');
+  });
+
+  it('signale un chauffeur introuvable plutôt que de répondre 200', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/admin/drivers/inconnu/statut',
+      headers: { authorization: 'Bearer jeton-admin' },
+      payload: { statut: 'SUSPENDU', motif: 'test' },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
+  it('refuse toute route d’administration à un chauffeur', async () => {
+    for (const url of ['/api/admin/stations', '/api/admin/drivers', '/api/admin/operators']) {
+      const lecture = await app.inject({
+        method: 'GET',
+        url,
+        headers: { authorization: 'Bearer jeton-chauffeur' },
+      });
+      expect(lecture.statusCode).toBe(403);
+    }
+
+    const ecriture = await app.inject({
+      method: 'POST',
+      url: '/api/admin/stations',
+      headers: { authorization: 'Bearer jeton-chauffeur' },
+      payload: { code: 'DKR-02', nom: 'Station interdite' },
+    });
+    expect(ecriture.statusCode).toBe(403);
   });
 });

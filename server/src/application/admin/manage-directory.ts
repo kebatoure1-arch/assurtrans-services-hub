@@ -18,6 +18,7 @@ import type { AuditLogger } from '../../ports/audit.ts';
 import type {
   DirectoryRepository,
   FicheChauffeur,
+  FicheEntite,
   FicheOperateur,
   FicheStation,
   StatutFiche,
@@ -67,8 +68,35 @@ export class ManageDirectory {
     return this.deps.annuaire.listerOperateurs();
   }
 
+  async creerEntite(
+    saisie: {
+      readonly raisonSociale: string;
+      readonly ninea?: string | null;
+      readonly rccm?: string | null;
+    },
+    acteur: string,
+  ): Promise<FicheEntite> {
+    const raisonSociale = texteRequis(saisie.raisonSociale, 'raison sociale');
+
+    const fiche: FicheEntite = {
+      id: this.deps.ids.next(),
+      raisonSociale,
+      ninea: saisie.ninea?.trim() || null,
+      rccm: saisie.rccm?.trim() || null,
+    };
+    await this.deps.annuaire.creerEntite(fiche);
+    await this.deps.audit.enregistrer({
+      actor: acteur,
+      action: 'ENTITE_CREEE',
+      targetType: 'entity',
+      targetId: fiche.id,
+      payload: { raisonSociale },
+    });
+    return fiche;
+  }
+
   async creerChauffeur(
-    saisie: { readonly nom: string; readonly telephone: string },
+    saisie: { readonly nom: string; readonly telephone: string; readonly entityId?: string },
     acteur: string,
   ): Promise<FicheChauffeur> {
     const nom = texteRequis(saisie.nom, 'nom du chauffeur');
@@ -79,7 +107,9 @@ export class ManageDirectory {
     }
 
     const fiche: FicheChauffeur = { id: this.deps.ids.next(), nom, msisdn, statut: 'ACTIF' };
-    await this.deps.annuaire.creerChauffeur(fiche);
+    // Une seule entite en Beta : celle du deploiement. Le parametre reste ouvert pour le jour
+    // ou Assur'Trans exploitera plusieurs comptes TotalEnergies.
+    await this.deps.annuaire.creerChauffeur(fiche, saisie.entityId ?? this.deps.entityId);
     await this.deps.audit.enregistrer({
       actor: acteur,
       action: 'CHAUFFEUR_CREE',

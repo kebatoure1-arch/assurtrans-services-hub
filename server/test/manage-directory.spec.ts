@@ -8,11 +8,14 @@ import { InMemoryAuditLogger } from '../src/infra/audit/audit-logger.ts';
 import type {
   DirectoryRepository,
   FicheChauffeur,
+  FicheEntite,
   FicheOperateur,
   FicheStation,
 } from '../src/ports/admin.ts';
 
 class Annuaire implements DirectoryRepository {
+  entites: FicheEntite[] = [];
+  rattachements = new Map<string, string>();
   chauffeurs: FicheChauffeur[] = [];
   stations: FicheStation[] = [];
   operateurs: FicheOperateur[] = [];
@@ -32,8 +35,12 @@ class Annuaire implements DirectoryRepository {
       !this.operateurs.some((o) => o.msisdn === msisdn)
     );
   }
-  async creerChauffeur(f: FicheChauffeur) {
+  async creerEntite(f: FicheEntite) {
+    this.entites.push(f);
+  }
+  async creerChauffeur(f: FicheChauffeur, entityId: string) {
     this.chauffeurs.push(f);
+    this.rattachements.set(f.id, entityId);
   }
   async creerStation(f: FicheStation) {
     this.stations.push(f);
@@ -83,6 +90,8 @@ describe('chauffeurs', () => {
     expect(c.msisdn).toBe('+221770000001');
     expect(c.statut).toBe('ACTIF');
     expect(annuaire.chauffeurs).toHaveLength(1);
+    // Rattache a l'entite du deploiement quand l'appelant n'en precise pas.
+    expect(annuaire.rattachements.get(c.id)).toBe(ENTITE);
   });
 
   it('refuse un numéro déjà utilisé, et dit par qui', async () => {
@@ -127,6 +136,20 @@ describe('chauffeurs', () => {
     await expect(
       referentiel.changerStatutChauffeur('inconnu', 'SUSPENDU', ADMIN, 'x'),
     ).rejects.toThrow(/introuvable/);
+  });
+});
+
+describe('entites', () => {
+  it('crée une entité et trace sa création', async () => {
+    const e = await referentiel.creerEntite({ raisonSociale: "Assur'Trans SARL" }, ADMIN);
+    expect(e.raisonSociale).toBe("Assur'Trans SARL");
+    expect(audit.evenements[0].action).toBe('ENTITE_CREEE');
+  });
+
+  it('refuse une raison sociale vide', async () => {
+    await expect(referentiel.creerEntite({ raisonSociale: '  ' }, ADMIN)).rejects.toThrow(
+      ReferentielRefuseError,
+    );
   });
 });
 
