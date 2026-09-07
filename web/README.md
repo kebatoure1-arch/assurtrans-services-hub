@@ -9,7 +9,7 @@ npm run dev      # http://localhost:5174
 npm run build
 ```
 
-L'adresse de l'API se regle par `ASSURTRANS_API` (defaut `http://localhost:3001`). C'est la
+L'adresse de l'API se regle par `ASSURTRANS_API` (defaut `http://localhost:3000`). C'est la
 seule variable, et c'est une information publique : aucun secret n'entre dans le bundle.
 
 ## Trois ecrans, un par situation
@@ -53,8 +53,11 @@ dakarois.
   Un identifiant de bon et un horodatage ISO n'ont rien a faire devant quelqu'un qui tient un
   pistolet a carburant.
 
-## Reste a faire
+## Limites assumées
 
-- Service worker : consultation hors ligne du dernier bon, file d'actions a la reconnexion.
-- Ecran administrateur : suivi des bons, rapprochement.
-- Envoi du code par SMS ou WhatsApp — bloque cote serveur, faute d'identifiants.
+- Le service worker conserve le shell et le dernier bon utilisable du chauffeur. Il ne met pas en
+  file les paiements et ne permet pas au pompiste de valider hors ligne.
+- L'écran administrateur reste volontairement vide tant que le suivi des bons et le rapprochement
+  ne sont pas implémentés.
+- Les codes OTP passent par Africa's Talking côté serveur. Les secrets ne doivent jamais entrer
+  dans le bundle frontend.

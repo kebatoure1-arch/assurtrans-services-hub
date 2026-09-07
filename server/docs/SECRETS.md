@@ -7,8 +7,12 @@ le JavaScript envoyé au navigateur. Une clé placée dans une variable `VITE_*`
 « configurée » : elle est **publiée**.
 
 L'audit initial a relevé **22 constats bloquants** : 13 variables de secret dans `.env.example`
-et 9 lectures effectives dans le code du front. Après nettoyage de `.env.example` puis retrait de
-l'héritage OLA ENERGY, il en reste **6**.
+et 9 lectures effectives dans le code du front.
+
+**Il n'en reste aucun.** 22 → 10 après nettoyage de `.env.example`, → 6 après retrait de
+l'héritage OLA ENERGY, → 0 le 2026-09-07 avec la suppression de l'ancien front Devv, dont les
+derniers fichiers portaient ces lectures. La référence figée du scan est vide : tout nouveau
+constat, où qu'il soit, fait désormais échouer le build.
 
 Nuance importante, et bonne nouvelle : **aucune de ces variables n'était renseignée**. Les
 services concernés tournaient en mode simulation. Rien n'a fuité. Le risque était que
@@ -55,15 +59,15 @@ dans une interpolation, ni dans un `JSON.stringify` de la configuration complèt
 |---|---|---|---|
 | `VITE_WAVE_API_KEY` | `WAVE_API_KEY` | ✅ fait | jamais utilisé par le front — rien à faire |
 | `VITE_WAVE_API_SECRET` | — | ✅ retiré | Wave n'utilise pas de secret pair |
-| `VITE_QR_SIGNATURE_SECRET` | `QR_SIGNATURE_SECRET` | ⬜ à migrer | `src/lib/qr-crypto.ts` → signature et vérification côté serveur |
+| `VITE_QR_SIGNATURE_SECRET` | `QR_SIGNATURE_SECRET` | ✅ fait | `src/lib/qr-crypto.ts` supprimé ; la signature et la vérification sont côté serveur (`infra/security/voucher-signature.ts`) |
 | `VITE_TPE_API_KEY` | — | ✅ supprimé | intégration OLA ENERGY retirée le 2026-09-06 |
 | `VITE_TPE_API_SECRET` | — | ✅ supprimé | idem |
 | `VITE_TPE_MERCHANT_ID` | — | ✅ supprimé | idem |
 | `VITE_TPE_WEBHOOK_SECRET` | — | ✅ supprimé | `tpe-webhook-handler.ts` supprimé |
-| `VITE_RESEND_API_KEY` | `RESEND_API_KEY` | ⬜ à migrer | `src/services/email-receipt-service.ts` |
-| `VITE_TWILIO_ACCOUNT_SID` | `TWILIO_ACCOUNT_SID` | ⬜ à migrer | `src/services/sms-notification-service.ts` |
-| `VITE_TWILIO_AUTH_TOKEN` | `TWILIO_AUTH_TOKEN` | ⬜ à migrer | idem |
-| `VITE_AFRICAS_TALKING_API_KEY` | `AFRICAS_TALKING_API_KEY` | ⬜ à migrer | idem |
+| `VITE_RESEND_API_KEY` | `RESEND_API_KEY` | ✅ supprimé | ancien front supprimé |
+| `VITE_TWILIO_ACCOUNT_SID` | `TWILIO_ACCOUNT_SID` | ✅ supprimé | ancien front supprimé |
+| `VITE_TWILIO_AUTH_TOKEN` | `TWILIO_AUTH_TOKEN` | ✅ supprimé | ancien front supprimé |
+| `VITE_AFRICAS_TALKING_API_KEY` | `AFRICAS_TALKING_API_KEY` | ✅ supprimé | ancien front supprimé |
 | `VITE_ORANGE_MONEY_*` | — | ⬜ à décider | dépend du sort du wallet client (ADR-001) |
 | `VITE_FREE_MONEY_*` | — | ⬜ à décider | idem |
 
@@ -92,11 +96,14 @@ Impact financier (envoi à volonté aux frais de l'entité) plutôt que fraude d
 À trancher avec le sort du wallet client — voir la section « Constat sur l'existant » de
 l'ADR-001. Si le wallet disparaît, ces clés disparaissent avec.
 
-## Ce qui n'a pas été fait, et pourquoi
+## Ce qui reste
 
-Les fonctions du front qui lisent les variables restantes **n'ont pas été supprimées**. Les
-retirer aujourd'hui casserait la signature des QR et l'envoi de SMS sans rien remplacer — les
-routes serveur correspondantes n'existent pas encore.
+Rien côté secrets exposés. Le nouveau front (`web/`) ne lit aucune variable sensible : sa seule
+configuration est l'adresse de l'API, qui est publique.
+
+Ce qui reste bloqué est ailleurs : aucune passerelle SMS n'est branchée, donc le code
+d'authentification part au journal du serveur. En production, quiconque lit les journaux peut se
+connecter à la place d'un chauffeur. Le journal de démarrage l'annonce (`envoiCodeParSms: false`).
 
 Ce qui a été fait est le préalable : les noms de variables ont disparu de `.env.example`, donc
 **plus personne ne peut renseigner un secret au mauvais endroit**, et le scan CI échoue si

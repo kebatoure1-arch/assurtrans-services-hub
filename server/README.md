@@ -145,10 +145,9 @@ Ce qui a été fait :
 | `loadConfig()` | échoue au démarrage, pas au premier paiement |
 | Scan CI avec référence figée | la dette connue passe, toute régression échoue le build |
 
-Constats restants : **6** (22 → 10 après nettoyage de `.env.example`, → 6 après retrait de
-l'héritage OLA ENERGY), tous du code front, tous listés avec leur ordre de migration dans
-`docs/SECRETS.md`. Ils n'ont pas été supprimés parce que les retirer aujourd'hui casserait la
-signature des QR et l'envoi de SMS sans rien remplacer.
+Constats restants : **aucun**. 22 → 10 après nettoyage de `.env.example`, → 6 après retrait de
+l'héritage OLA ENERGY, → 0 avec la suppression de l'ancien front Devv. La référence figée du
+scan est vide : tout nouveau constat fait échouer le build.
 
 La clé Wave, elle, n'entre jamais dans ce périmètre : injectée au démarrage depuis KMS/Vault,
 portée par `Secret`, exposée à un seul endroit du système — la construction de l'en-tête

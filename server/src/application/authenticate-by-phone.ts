@@ -103,7 +103,11 @@ export class AuthenticateByPhone {
     // Le défi est enregistré AVANT l'envoi : un code envoyé sans défi enregistré serait
     // invérifiable, et le chauffeur attendrait un code qui ne marcherait jamais.
     await this.deps.challenges.remplacer(challenge);
-    await this.deps.sender.envoyer(msisdn, code);
+    const envoye = await this.deps.sender.envoyer(msisdn, code);
+    if (!envoye) {
+      await this.deps.challenges.majTentative({ ...challenge, consomme: true });
+      throw new AuthentificationRefuseeError('envoi du code impossible, réessayez plus tard');
+    }
 
     return {
       valideSecondes: otp.dureeSecondes,

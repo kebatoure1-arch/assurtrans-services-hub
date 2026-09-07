@@ -36,9 +36,10 @@ class Challenges implements OtpChallengeRepository {
 
 class Envois implements OtpSender {
   readonly envoyes: { msisdn: string; code: string }[] = [];
+  reussit = true;
   async envoyer(msisdn: string, code: string) {
     this.envoyes.push({ msisdn, code });
-    return true;
+    return this.reussit;
   }
 }
 
@@ -96,6 +97,15 @@ describe('demande de code', () => {
     expect(envois.envoyes).toHaveLength(1);
     expect(envois.envoyes[0].msisdn).toBe('+221770000001');
     expect(envois.envoyes[0].code).toMatch(/^\d{6}$/);
+  });
+
+  it("n'autorise pas un code quand l'envoi SMS échoue", async () => {
+    envois.reussit = false;
+
+    await expect(auth.demanderCode('77 000 00 01', MAINTENANT)).rejects.toThrow(
+      /envoi du code impossible/,
+    );
+    expect(await challenges.trouverVivant('+221770000001')).toBeNull();
   });
 
   it('répond exactement pareil pour un numéro inconnu, sans rien envoyer', async () => {
