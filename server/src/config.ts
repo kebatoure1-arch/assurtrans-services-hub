@@ -124,10 +124,19 @@ export async function loadConfig(
   const payoutReferenceField = env.WAVE_PAYOUT_REFERENCE_FIELD?.trim() ?? '';
   const checkoutLaunchUrlField = env.WAVE_CHECKOUT_LAUNCH_URL_FIELD?.trim() ?? '';
   const smsProvider = env.OTP_SMS_PROVIDER?.trim() || 'LOG';
+  const environnement = env.NODE_ENV?.trim() || 'development';
   if (smsProvider !== 'AFRICAS_TALKING' && smsProvider !== 'LOG') {
     throw new ConfigurationError(
       `« OTP_SMS_PROVIDER » doit valoir AFRICAS_TALKING ou LOG (reçu « ${smsProvider} »)`,
     );
+  }
+  if (environnement === 'production' && smsProvider === 'LOG') {
+    throw new ConfigurationError(
+      'OTP_SMS_PROVIDER=LOG est interdit en production : configurez Africa\'s Talking',
+    );
+  }
+  if (environnement === 'production' && env.OTP_ECHO === 'true') {
+    throw new ConfigurationError('OTP_ECHO=true est interdit en production');
   }
 
   if (canalParDefaut !== 'DRY_RUN' && payoutReferenceField === '') {

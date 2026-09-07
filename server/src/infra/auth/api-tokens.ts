@@ -44,7 +44,7 @@ export class PgAccessTokenVerifier implements AccessTokenVerifier {
           SET dernier_usage = now()
         WHERE token_hash = $1
           AND revoque_a IS NULL
-          AND (expire_a IS NULL OR expire_a > now())
+          AND expire_a > now()
       RETURNING subject, role, station_id`,
       [empreinte(token)],
     );

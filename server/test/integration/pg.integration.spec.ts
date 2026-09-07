@@ -267,8 +267,8 @@ decrire('intégration PostgreSQL', () => {
     it('un jeton valide résout son porteur ; le jeton en clair n’est jamais stocké', async () => {
       const jeton = genererJeton();
       await pool.query(
-        `INSERT INTO api_tokens (id, role, subject, token_hash, station_id)
-         VALUES ($1, 'STATION_OPERATOR', 'pompiste-12', $2, $3)`,
+        `INSERT INTO api_tokens (id, role, subject, token_hash, station_id, expire_a)
+         VALUES ($1, 'STATION_OPERATOR', 'pompiste-12', $2, $3, now() + interval '1 hour')`,
         [uuid(), empreinte(jeton), stationId],
       );
 
@@ -287,8 +287,8 @@ decrire('intégration PostgreSQL', () => {
     it('un jeton révoqué ne résout plus rien', async () => {
       const jeton = genererJeton();
       await pool.query(
-        `INSERT INTO api_tokens (id, role, subject, token_hash, revoque_a)
-         VALUES ($1, 'ADMIN', 'admin-1', $2, now())`,
+        `INSERT INTO api_tokens (id, role, subject, token_hash, revoque_a, expire_a)
+         VALUES ($1, 'ADMIN', 'admin-1', $2, now(), now() + interval '1 hour')`,
         [uuid(), empreinte(jeton)],
       );
       expect(await new PgAccessTokenVerifier(db).verify(jeton)).toBeNull();
@@ -297,8 +297,8 @@ decrire('intégration PostgreSQL', () => {
     it('la base refuse un pompiste sans station de rattachement', async () => {
       await expect(
         pool.query(
-          `INSERT INTO api_tokens (id, role, subject, token_hash)
-           VALUES ($1, 'STATION_OPERATOR', 'p-9', $2)`,
+          `INSERT INTO api_tokens (id, role, subject, token_hash, expire_a)
+           VALUES ($1, 'STATION_OPERATOR', 'p-9', $2, now() + interval '1 hour')`,
           [uuid(), empreinte(genererJeton())],
         ),
       ).rejects.toThrow(/pompiste_rattache/);

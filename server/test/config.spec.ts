@@ -95,6 +95,21 @@ describe('loadConfig — échouer au démarrage, pas au premier paiement', () =>
     expect(active.otp.echoCode).toBe(true);
   });
 
+  it("refuse l'écho OTP et le journal SMS en production", async () => {
+    await expect(
+      loadConfig(secrets, {
+        ...ENV_MINIMAL,
+        NODE_ENV: 'production',
+        OTP_ECHO: 'true',
+        OTP_SMS_PROVIDER: 'AFRICAS_TALKING',
+        AFRICAS_TALKING_USERNAME: 'sandbox',
+      }),
+    ).rejects.toThrow(/OTP_ECHO/);
+    await expect(
+      loadConfig(secrets, { ...ENV_MINIMAL, NODE_ENV: 'production' }),
+    ).rejects.toThrow(/OTP_SMS_PROVIDER=LOG/);
+  });
+
   it('aucune origine autorisée par défaut', async () => {
     const c = await loadConfig(secrets, ENV_MINIMAL);
     expect(c.originesAutorisees).toEqual([]);
