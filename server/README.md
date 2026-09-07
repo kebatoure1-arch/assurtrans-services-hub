@@ -55,6 +55,26 @@ DATABASE_URL=postgres://assurtrans:developpement-local-uniquement@localhost:5543
 Il imprime l'`ENTITY_ID` a reporter dans `.env`. Tout le reste — chauffeurs, stations,
 pompistes — se cree ensuite depuis l'interface, ou chaque geste laisse une trace d'audit.
 
+### Jeu de demonstration
+
+De quoi parcourir les trois interfaces sur des donnees qui ressemblent a de l'exploitation :
+trois chauffeurs dont un QR utilisable chacun, deux stations avec leur pompiste, un historique
+de consommation etale sur trente jours, un envoi de QR en echec et une facture echue.
+
+```bash
+DATABASE_URL=... ENTITY_ID=... npm run jeu-demo -- charger
+DATABASE_URL=... npm run jeu-demo -- effacer
+```
+
+Le script **refuse toute base dont l'hote n'est pas local** : une fois melangees a de
+l'exploitation, des donnees inventees ne se distinguent plus des vraies. Chaque ligne porte un
+identifiant derive d'un libelle fixe, donc recharger ne duplique rien et `effacer` retire
+exactement ce qui a ete pose. Les numeros sont tous dans la plage `+22177000000x`, qui n'est
+attribuee a personne.
+
+L'encours atteint 74 % du plafond : la jauge passe en alerte et la projection annonce une date
+de blocage. C'est voulu — un tableau de bord a zero ne montre rien de ce qu'il sait faire.
+
 ### Tests d'integration
 
 ```bash

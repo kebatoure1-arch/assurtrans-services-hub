@@ -19,7 +19,8 @@
     "demo": "tsc -p tsconfig.build.json && node dist/demo/demo-server.js",
     "db:local": "node scripts/base-locale.mjs demarrer",
     "db:local:effacer": "node scripts/base-locale.mjs effacer",
-    "amorcer": "node scripts/amorcer.mjs"
+    "amorcer": "node scripts/amorcer.mjs",
+    "jeu-demo": "node scripts/jeu-demo.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
