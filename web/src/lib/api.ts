@@ -87,6 +87,72 @@ async function appeler<T>(
   return corps as T;
 }
 
+export type StatutFiche = 'ACTIF' | 'SUSPENDU';
+
+export interface FicheChauffeur {
+  readonly id: string;
+  readonly nom: string;
+  readonly msisdn: string;
+  readonly statut: StatutFiche;
+}
+
+export interface FicheStation {
+  readonly id: string;
+  readonly code: string;
+  readonly nom: string;
+  readonly ville: string | null;
+  readonly statut: 'ACTIVE' | 'INACTIVE';
+}
+
+export interface FicheOperateur {
+  readonly id: string;
+  readonly nom: string;
+  readonly msisdn: string;
+  readonly role: Role;
+  readonly stationId: string | null;
+  readonly statut: StatutFiche;
+}
+
+export interface EtatPilotage {
+  readonly contrat: {
+    readonly numeroCompte: string;
+    readonly encoursAutorise: number;
+    readonly seuilAlertePct: number;
+    readonly seuilBlocagePct: number;
+    readonly canalReglement: string;
+  } | null;
+  readonly encours: {
+    readonly encoursAutorise: number;
+    readonly encoursCourant: number;
+    readonly disponible: number;
+    readonly utilisationPct: number;
+    readonly depassement: number;
+    readonly seuilAlerteXof: number;
+    readonly seuilBlocageXof: number;
+    readonly niveau: 'NORMAL' | 'ALERTE' | 'BLOCAGE';
+  } | null;
+  readonly projection: {
+    readonly joursRestants: number | null;
+    readonly date: string | null;
+    readonly raison: 'PROJETE' | 'DEJA_ATTEINT' | 'CONSOMMATION_NULLE';
+  } | null;
+  readonly bonsEnCirculation: number;
+  readonly activite: {
+    readonly bonsEmis: number;
+    readonly montantEmis: number;
+    readonly bonsConsommes: number;
+    readonly montantConsomme: number;
+  };
+  readonly incidents: readonly {
+    readonly type: string;
+    readonly gravite: 'CRITIQUE' | 'ATTENTION';
+    readonly nombre: number;
+    readonly libelle: string;
+  }[];
+  readonly avertissements: readonly string[];
+  readonly arreteA: string;
+}
+
 export const api = {
   demanderCode: (telephone: string) =>
     appeler<{ valideSecondes: number; code?: string }>('/api/auth/code', {
@@ -104,6 +170,38 @@ export const api = {
       '/api/paiements/session',
       { methode: 'POST', corps: { montantXof }, jeton },
     ),
+
+  tableauDeBord: (jeton: string) =>
+    appeler<EtatPilotage>('/api/admin/tableau-de-bord', { jeton }),
+
+  chauffeurs: (jeton: string) => appeler<FicheChauffeur[]>('/api/admin/drivers', { jeton }),
+  stations: (jeton: string) => appeler<FicheStation[]>('/api/admin/stations', { jeton }),
+  operateurs: (jeton: string) => appeler<FicheOperateur[]>('/api/admin/operators', { jeton }),
+
+  creerChauffeur: (jeton: string, corps: { nom: string; telephone: string }) =>
+    appeler<FicheChauffeur>('/api/admin/drivers', { methode: 'POST', corps, jeton }),
+
+  creerStation: (jeton: string, corps: { code: string; nom: string; ville?: string }) =>
+    appeler<FicheStation>('/api/admin/stations', { methode: 'POST', corps, jeton }),
+
+  creerOperateur: (
+    jeton: string,
+    corps: { nom: string; telephone: string; role: Role; stationId: string | null },
+  ) => appeler<FicheOperateur>('/api/admin/operators', { methode: 'POST', corps, jeton }),
+
+  changerStatutChauffeur: (jeton: string, id: string, statut: StatutFiche, motif: string) =>
+    appeler<{ id: string; statut: StatutFiche }>(`/api/admin/drivers/${id}/statut`, {
+      methode: 'POST',
+      corps: { statut, motif },
+      jeton,
+    }),
+
+  changerStatutOperateur: (jeton: string, id: string, statut: StatutFiche, motif: string) =>
+    appeler<{ id: string; statut: StatutFiche }>(`/api/admin/operators/${id}/statut`, {
+      methode: 'POST',
+      corps: { statut, motif },
+      jeton,
+    }),
 
   consommer: (jeton: string, token: string, redemptionId: string) =>
     appeler<{ servir: boolean; montantXof: number; bon: string; dejaServi: boolean }>(
