@@ -53,6 +53,9 @@ jobs:
       - name: Installer les dépendances
         run: npm ci
 
+      - name: Vérification des types
+        run: npm run typecheck
+
       - name: Tests d'interface
         run: npm test
 

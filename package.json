@@ -8,8 +8,9 @@
     "dev": "npm --prefix web run dev",
     "build": "npm --prefix web run build",
     "preview": "npm --prefix web run preview",
-    "test": "npm --prefix server test",
-    "typecheck": "npm --prefix server run typecheck && npm --prefix web exec tsc -- --noEmit",
-    "scan:secrets": "npm --prefix server run scan:secrets"
+    "test": "npm --prefix server test && npm --prefix web test",
+    "typecheck": "npm --prefix server run typecheck && npm --prefix web run typecheck",
+    "scan:secrets": "npm --prefix server run scan:secrets",
+    "test:integration": "npm --prefix server run test:integration"
   }
 }

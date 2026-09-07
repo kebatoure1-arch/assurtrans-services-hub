@@ -16,7 +16,6 @@
     "db:down": "docker compose down -v",
     "migrate": "node scripts/migrate.mjs",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "demo": "tsc -p tsconfig.build.json && node dist/demo/demo-server.js",
     "db:local": "node scripts/base-locale.mjs demarrer",
     "db:local:effacer": "node scripts/base-locale.mjs effacer",
     "amorcer": "node scripts/amorcer.mjs",
@@ -25,9 +24,7 @@
   "devDependencies": {
     "@types/node": "^22.20.1",
     "@types/pg": "^8.23.1",
-    "@types/qrcode": "^1.5.6",
     "embedded-postgres": "^18.4.0-beta.17",
-    "qrcode": "^1.5.4",
     "typescript": "~5.7.2",
     "vitest": "^2.1.9"
   },

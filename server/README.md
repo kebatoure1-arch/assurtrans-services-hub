@@ -97,13 +97,20 @@ MissingSecretError : secret WAVE_API_KEY absent ou vide : aucun repli n'est prev
 | Route | Role | Effet |
 |---|---|---|
 | `GET /health` | public | etat du service |
+| `POST /api/auth/code` | public | envoie un code à six chiffres au numéro |
+| `POST /api/auth/session` | public | échange le code contre un jeton de session |
+| `GET /api/moi` | authentifié | qui je suis, et à quelle station je suis rattaché |
+| `GET /api/admin/tableau-de-bord` | `ADMIN` | encours, projection, activité du jour, incidents |
 | `POST /api/admin/entities` | `ADMIN` | crée une entité de rattachement |
-| `POST /api/admin/drivers` | `ADMIN` | crée un chauffeur |
-| `POST /api/admin/stations` | `ADMIN` | crée une station |
-| `POST /api/admin/operators` | `ADMIN` | crée un pompiste ou un administrateur |
+| `GET`/`POST /api/admin/drivers` | `ADMIN` | liste et crée les chauffeurs |
+| `GET`/`POST /api/admin/stations` | `ADMIN` | liste et crée les stations |
+| `GET`/`POST /api/admin/operators` | `ADMIN` | liste et crée pompistes et administrateurs |
+| `POST /api/admin/drivers/:id/statut` | `ADMIN` | suspend ou réactive — sans toucher aux bons émis |
+| `POST /api/admin/operators/:id/statut` | `ADMIN` | suspend ou réactive un opérateur |
 | `POST /api/paiements/session` | `DRIVER`, `ADMIN` | ouvre une session de paiement, rend l'URL a presenter au chauffeur |
 | `POST /webhooks/wave` | signature HMAC | confirme un paiement, emet le bon, met le QR en file |
 | `POST /api/station/consommation` | `STATION_OPERATOR` | consomme un bon, rend le montant a servir |
+| `GET /api/bons` | `DRIVER` | ses bons ; le jeton du QR n'accompagne que ceux encore utilisables |
 | `GET /api/bons/:id` | `DRIVER` (le sien), `ADMIN`, `STATION_OPERATOR` | consultation |
 
 Trois regles y sont verifiees par des tests, parce qu'elles se contournent facilement si on ne
@@ -230,14 +237,19 @@ server/
 │   ├── 0001_init.sql                     Schéma + contraintes d'intégrité en base
 │   ├── 0002_bons_carburant.sql           Chauffeurs, paiements, bons, envois, stations
 │   ├── 0003_acces_api.sql                Jetons d'API, roles, rattachement des pompistes
-│   └── 0004_sessions_paiement.sql        Sessions ouvertes : qui paie, et combien
+│   ├── 0004_sessions_paiement.sql        Sessions ouvertes : qui paie, et combien
+│   ├── 0005_corrections_schema.sql       Deux écarts schéma/code trouvés par l'intégration
+│   ├── 0006_authentification.sql         Défis OTP, opérateurs authentifiés par téléphone
+│   └── 0007_expiration_tokens.sql        Péremption des sessions
 ├── src/
 │   ├── domain/                           Logique métier pure. Zéro I/O.
 │   │   ├── money.ts                      XOF entier. Aucun flottant, aucun centime.
 │   │   ├── credit-line.ts                Encours, seuils, projection d'atteinte du blocage
 │   │   ├── payment-intent.ts             Machine à états du règlement
 │   │   ├── fuel-voucher.ts               Bon à usage unique : émission, consommation, annulation
-│   │   └── reconciliation.ts             Rapprochement à trois voies
+│   │   ├── reconciliation.ts             Rapprochement à trois voies
+│   │   ├── otp.ts                        Comparaison à temps constant, écrite en JS pur
+│   │   └── audit.ts                      Empreinte canonique du payload, jamais le payload
 │   ├── main.ts                           Cablage. Seul fichier ou le concret rencontre le metier.
 │   ├── config.ts                         Chargement au démarrage, échec immédiat si incomplet
 │   ├── http/
@@ -245,19 +257,33 @@ server/
 │   │   └── checkout-mapper.ts            Lecture des evenements de paiement, par configuration
 │   ├── application/
 │   │   ├── emit-voucher-on-payment.ts    Paiement confirmé → bon émis → QR mis en file
-│   │   └── redeem-voucher-at-station.ts  Scan du pompiste → consommation atomique
+│   │   ├── redeem-voucher-at-station.ts  Scan du pompiste → consommation atomique
+│   │   ├── authenticate-by-phone.ts      Demande de code, ouverture de session
+│   │   └── admin/
+│   │       ├── manage-directory.ts       Référentiel : unicité du numéro, changements de statut
+│   │       └── tableau-de-bord.ts        Encours, projection, activité, incidents
 │   ├── ports/
 │   │   ├── settlement-channel.ts         Sortie de fonds — règlement TotalEnergies
 │   │   ├── collection-channel.ts         Entrée de fonds — paiement des chauffeurs
-│   │   └── repositories.ts               Persistance, écritures conditionnelles
+│   │   ├── repositories.ts               Persistance, écritures conditionnelles
+│   │   ├── admin.ts                      Référentiel et pilotage
+│   │   ├── authentication.ts             Défis OTP, sessions
+│   │   └── audit.ts                      Journal en ajout seul
 │   └── infra/
 │       ├── secrets/secrets.ts            Secret non journalisable, refus du préfixe VITE_
 │       ├── security/voucher-signature.ts Signature HMAC du QR, rotation de clé supportée
 │       ├── webhooks/webhook.ts           Signature, fenêtre d'horodatage, déduplication
-│       ├── auth/api-tokens.ts            Jetons porteurs : seule l'empreinte est stockee
-│       ├── db/sql-executor.ts            Port SQL minimal
-│       ├── db/pg-repositories.ts         Ecritures conditionnelles, BIGINT lus sans arrondi
-│       └── db/pg-pool.ts                 Seul fichier qui connait node-postgres
+│       ├── audit/audit-logger.ts         Écriture dans `audit_events`
+│       ├── auth/
+│       │   ├── api-tokens.ts             Jetons porteurs : seule l'empreinte est stockee
+│       │   ├── otp-crypto.ts             Tirage et empreinte du code — la crypto reste ici
+│       │   └── otp-senders.ts            Africa's Talking, ou journal en développement
+│       ├── db/
+│       │   ├── sql-executor.ts           Port SQL minimal
+│       │   ├── pg-repositories.ts        Ecritures conditionnelles, BIGINT lus sans arrondi
+│       │   ├── pg-admin.ts               Référentiel et mesures de pilotage
+│       │   ├── pg-auth.ts                Défis OTP et sessions
+│       │   └── pg-pool.ts                Seul fichier qui connait node-postgres
 │       └── wave/
 │           ├── wave-client.ts            HTTP. Endpoints documentés uniquement.
 │           ├── payout-channels.ts        B2BPayoutChannel | MobilePayoutChannel
@@ -266,8 +292,13 @@ server/
 │           ├── dry-run-collection-channel.ts
 │           ├── resolve-channel.ts        Sélection du canal de règlement
 │           └── resolve-collection.ts     Sélection du canal d'encaissement
-├── scripts/scan-secrets.mjs              Scan CI (§11, item 1) + référence figée
-└── test/                                 194 tests
+├── scripts/
+│   ├── base-locale.mjs                   PostgreSQL portable, sans Docker ni droits admin
+│   ├── migrate.mjs                       Une migration par transaction
+│   ├── amorcer.mjs                       Premier administrateur — refuse s'il en existe un
+│   ├── jeu-demo.mjs                      Données de démonstration, bases locales uniquement
+│   └── scan-secrets.mjs                  Scan CI (§11, item 1) + référence figée
+└── test/                                 274 tests unitaires + 40 d'intégration
 ```
 
 ### Garanties couvertes par les tests

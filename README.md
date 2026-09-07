@@ -5,10 +5,11 @@ Le depot contient un frontend autonome et une API serveur separee.
 
 ## Structure
 
-- `web/` : application React/Vite destinée aux chauffeurs et pompistes. Autonome, sans
-  dépendance à un fournisseur d'identité tiers, sans secret dans le bundle.
+- `web/` : application React/Vite destinée aux chauffeurs, aux pompistes et à l'administration.
+  Autonome, sans dépendance à un fournisseur d'identité tiers, sans secret dans le bundle.
 - `server/` : API Fastify/PostgreSQL, authentification par téléphone, paiements et bons.
 - `server/migrations/` : schéma PostgreSQL versionné.
+- `server/scripts/` : base locale sans Docker, migrations, amorçage, jeu de démonstration.
 
 La racine ne contient plus que l'aiguillage de scripts : `web/` et `server/` portent chacun
 leurs dépendances et leur lockfile, comme la CI les installe.
@@ -18,17 +19,34 @@ leurs dépendances et leur lockfile, comme la CI les installe.
 ```powershell
 cd server
 npm install
-npm run typecheck
-npm test
-
-cd ../web
-npm install
-npm run dev
+npm run db:local          # PostgreSQL local, sans Docker ; laisser tourner
 ```
 
-Le frontend utilise `ASSURTRANS_API` pour l'adresse publique de l'API. Copiez `.env.example`
-vers `web/.env.local` et adaptez cette valeur si nécessaire. Les secrets serveur sont documentés
-dans `server/.env.example` et ne doivent jamais être ajoutés au dépôt.
+Dans un autre terminal, migrations puis amorçage — une base neuve n'a aucun administrateur, et
+en créer un passe par l'API, qui en exige déjà un :
+
+```powershell
+cd server
+npm run migrate -- <DATABASE_URL>
+npm run amorcer -- --entite "..." --admin "..." --telephone 77XXXXXXX --compte-te "TE-..."
+npm run jeu-demo -- charger    # facultatif : de quoi parcourir les écrans
+npm run build; npm start
+```
+
+Puis le front :
+
+```powershell
+cd web
+npm install
+npm run dev               # http://localhost:5174
+```
+
+Le frontend utilise `ASSURTRANS_API` pour l'adresse publique de l'API (défaut
+`http://localhost:3001`). Copiez `.env.example` vers `web/.env.local` pour l'ajuster. Les secrets
+serveur sont documentés dans `server/.env.example` et ne doivent jamais être ajoutés au dépôt.
+
+Le détail — encodage de la base, séparation base de développement / base de test, garde-fous du
+jeu de démonstration — est dans [server/README.md](server/README.md).
 
 ## Sécurité et limites
 
@@ -36,9 +54,17 @@ dans `server/.env.example` et ne doivent jamais être ajoutés au dépôt.
 - `LOG` et `OTP_ECHO=true` sont réservés aux démonstrations locales.
 - Le dernier bon utilisable peut être affiché hors ligne par le chauffeur ; la validation en
   station et les paiements nécessitent toujours l'API.
-- L'écran administrateur est volontairement un écran d'attente sans actions fictives.
+- L'administration tient le référentiel (chauffeurs, stations, opérateurs) et le pilotage de
+  l'encours. Le règlement de TotalEnergies reste en `DRY_RUN` : aucun mouvement d'argent réel
+  ne part tant que les paramètres du §14 ne sont pas obtenus.
 
 ## CI
 
-La CI exécute le scan de secrets, le typecheck et les tests du serveur, ainsi que le build du
-frontend. Voir [server/README.md](server/README.md) pour le runbook opérationnel.
+Deux tâches. Serveur : scan de secrets, typecheck, tests. Frontend : tests d'interface, build.
+Le scan de secrets passe en premier — un secret exposé rend le reste sans objet.
+
+Les tests d'intégration PostgreSQL ne tournent pas en CI : ils exigent une base, et sans
+`DATABASE_URL_TEST` la suite est ignorée plutôt qu'en échec. Ils se lancent en local, et c'est
+une limite assumée à lever quand la CI disposera d'un service PostgreSQL.
+
+Voir [server/README.md](server/README.md) pour le runbook opérationnel.

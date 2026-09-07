@@ -9,19 +9,27 @@ npm run dev      # http://localhost:5174
 npm run build
 ```
 
-L'adresse de l'API se regle par `ASSURTRANS_API` (defaut `http://localhost:3000`). C'est la
-seule variable, et c'est une information publique : aucun secret n'entre dans le bundle.
+```bash
+npm test         # 64 tests d'interface
+```
 
-## Trois ecrans, un par situation
+L'adresse de l'API se regle par `ASSURTRANS_API` (defaut `http://localhost:3001`). C'est la
+seule variable, et c'est une information publique : aucun secret n'entre dans le bundle. Vite la
+lit aussi bien depuis `web/.env.local` que depuis l'environnement du processus — une variable
+exportee dans le terminal l'emporte donc sur le fichier.
+
+## Un ecran par situation
 
 | Ecran | Qui | La seule question a laquelle il repond |
 |---|---|---|
 | Connexion | tout le monde | quel est votre numero ? |
 | Chauffeur | `DRIVER` | ai-je un bon a presenter ? |
 | Pompiste | `STATION_OPERATOR` | est-ce que je sers, et combien ? |
+| Pilotage | `ADMIN` | ou en est l'encours TotalEnergies ? |
+| Referentiel | `ADMIN` | qui sont les chauffeurs, stations et operateurs ? |
 
-Pas de menu, pas d'onglets : le role decide de l'ecran. Un chauffeur ne voit jamais celui du
-pompiste.
+Le role decide de l'ecran : un chauffeur ne voit jamais celui du pompiste. Seul
+l'administrateur a une navigation, parce que lui seul a plusieurs choses a faire.
 
 ## Ce qui a guide le dessin
 
@@ -57,7 +65,8 @@ dakarois.
 
 - Le service worker conserve le shell et le dernier bon utilisable du chauffeur. Il ne met pas en
   file les paiements et ne permet pas au pompiste de valider hors ligne.
-- L'écran administrateur reste volontairement vide tant que le suivi des bons et le rapprochement
-  ne sont pas implémentés.
+- L'administration couvre le referentiel et le pilotage de l'encours. Le cycle de reglement
+  TotalEnergies — facture, intention, double approbation, execution — n'a pas encore d'ecran, ni
+  le rapprochement, ni la consultation du journal d'audit.
 - Les codes OTP passent par Africa's Talking côté serveur. Les secrets ne doivent jamais entrer
   dans le bundle frontend.
