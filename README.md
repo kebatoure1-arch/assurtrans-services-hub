@@ -5,9 +5,13 @@ Le depot contient un frontend autonome et une API serveur separee.
 
 ## Structure
 
-- `web/` : application React/Vite destinée aux chauffeurs et pompistes.
+- `web/` : application React/Vite destinée aux chauffeurs et pompistes. Autonome, sans
+  dépendance à un fournisseur d'identité tiers, sans secret dans le bundle.
 - `server/` : API Fastify/PostgreSQL, authentification par téléphone, paiements et bons.
 - `server/migrations/` : schéma PostgreSQL versionné.
+
+La racine ne contient plus que l'aiguillage de scripts : `web/` et `server/` portent chacun
+leurs dépendances et leur lockfile, comme la CI les installe.
 
 ## Démarrage local
 
