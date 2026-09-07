@@ -9,26 +9,61 @@ depuis un portefeuille **Wave Business** détenu par l'entité.
 ```bash
 cd server
 npm install
-npm test              # 194 tests
+npm test              # 274 tests
 npm run typecheck
 npm run scan:secrets
 npm run build && npm start
 ```
 
-### Tests d'integration
+## Base de donnees
 
-Ils tournent contre un vrai PostgreSQL jetable — sans volume, tout disparait a l'arret.
+Deux facons d'obtenir un PostgreSQL. La premiere ne demande ni Docker ni droits
+d'administrateur : `embedded-postgres` telecharge une distribution portable et la lance comme un
+simple processus utilisateur.
 
 ```bash
-npm run db:up
-npm run migrate -- postgres://assurtrans:test-uniquement-jamais-en-production@localhost:55432/assurtrans_test
-DATABASE_URL_TEST=postgres://assurtrans:test-uniquement-jamais-en-production@localhost:55432/assurtrans_test npm run test:integration
-npm run db:down
+npm run db:local     # laisse tourner ; imprime les deux URL de connexion
 ```
 
-Sans `DATABASE_URL_TEST`, la suite est **ignoree** plutot qu'en echec : un poste sans Docker ne
-doit pas voir rouge pour cette raison. Attention a ne pas confondre « 22 tests ignores » avec
-« 22 tests passes ».
+Il cree **deux** bases : `assurtrans` pour le developpement, `assurtrans_test` pour les tests.
+Elles sont separees pour une raison precise — la suite d'integration vide tout le referentiel
+entre chaque cas, et partager la base effacerait l'entite, le contrat et l'administrateur.
+
+Les donnees vivent dans `server/.donnees-locales/`, hors depot. `npm run db:local:effacer`
+supprime tout.
+
+L'autre voie reste Docker : `npm run db:up` / `npm run db:down`.
+
+Puis les migrations, sur chaque base :
+
+```bash
+npm run migrate -- postgres://assurtrans:developpement-local-uniquement@localhost:55432/assurtrans
+npm run migrate -- postgres://assurtrans:developpement-local-uniquement@localhost:55432/assurtrans_test
+```
+
+### Amorcage
+
+Une base migree est vide, et cela suffit a bloquer : creer un administrateur passe par l'API,
+qui exige deja un jeton d'administrateur. Le script d'amorcage coupe cette boucle **une fois**,
+en ecrivant directement en base. Il refuse de s'executer si un administrateur existe deja : ce
+n'est pas une porte derobee, c'est un outil d'installation.
+
+```bash
+DATABASE_URL=postgres://assurtrans:developpement-local-uniquement@localhost:55432/assurtrans   npm run amorcer -- --entite "Assur'Trans Services SARL"                      --admin "Nom de l'administrateur"                      --telephone 77XXXXXXX                      --compte-te "TE-..." --encours 10000000 --delai 30
+```
+
+Il imprime l'`ENTITY_ID` a reporter dans `.env`. Tout le reste — chauffeurs, stations,
+pompistes — se cree ensuite depuis l'interface, ou chaque geste laisse une trace d'audit.
+
+### Tests d'integration
+
+```bash
+DATABASE_URL_TEST=postgres://assurtrans:developpement-local-uniquement@localhost:55432/assurtrans_test npm run test:integration
+```
+
+Sans `DATABASE_URL_TEST`, la suite est **ignoree** plutot qu'en echec : un poste sans base ne
+doit pas voir rouge pour cette raison. Attention a ne pas confondre « 40 tests ignores » avec
+« 40 tests passes ».
 
 Sans configuration, le serveur refuse de demarrer et nomme la variable manquante :
 
@@ -279,16 +314,13 @@ Deux règles sont codées, l'une exigée par le cahier des charges, l'autre ajou
 
 Dans l'ordre où cela devrait être fait :
 
-1. **Executer les tests d'integration.** Ils sont ecrits (22 cas) mais n'ont jamais tourne : le
-   demon Docker n'a pas pu demarrer sur le poste de developpement. Tant qu'ils n'ont pas tourne,
-   les contraintes des migrations restent non prouvees.
-2. Envoi WhatsApp — **bloque** : identifiants WhatsApp Business et modele approuve par Meta.
-3. Worker d'envoi et reprise des envois en echec.
-4. `AuditLogger` branche sur `audit_events`.
-5. `Scheduler` : jobs at-least-once, verrou via `job_locks`, intention de reglement a J-n.
-6. Import du releve de consommation TE — **format a obtenir** (§14, parametre 4).
-7. PWA installable (manifest, service worker, file d'actions hors ligne, Web Push VAPID).
-8. Jeu d'enregistrements de reponses reelles en sandbox Wave.
+1. Envoi WhatsApp — **bloque** : identifiants WhatsApp Business et modele approuve par Meta.
+2. Worker d'envoi et reprise des envois en echec.
+3. `AuditLogger` branche sur `audit_events`.
+4. `Scheduler` : jobs at-least-once, verrou via `job_locks`, intention de reglement a J-n.
+5. Import du releve de consommation TE — **format a obtenir** (§14, parametre 4).
+6. PWA installable (manifest, service worker, file d'actions hors ligne, Web Push VAPID).
+7. Jeu d'enregistrements de reponses reelles en sandbox Wave.
 
 ---
 

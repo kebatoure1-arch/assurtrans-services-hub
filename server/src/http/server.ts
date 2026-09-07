@@ -675,7 +675,18 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   });
 
   app.setErrorHandler((cause, req, reply) => {
-    req.log.error({ err: cause }, 'erreur non rattrapée');
+    // `logger: false` rend `req.log` muet : sans cette ligne, une erreur non rattrapee ne
+    // laisse aucune trace et le 500 se debogue a l'aveugle. On ecrit la route et le message,
+    // jamais le corps de la requete ni la pile — l'un porte des donnees personnelles, l'autre
+    // des chemins de fichiers.
+    console.error(
+      JSON.stringify({
+        erreur: 'non rattrapee',
+        methode: req.method,
+        route: req.routeOptions?.url ?? req.url,
+        cause: cause instanceof Error ? `${cause.name} : ${cause.message}` : String(cause),
+      }),
+    );
     // Le détail reste au serveur : un message d'erreur est une surface d'information.
     erreur(reply, 500, 'erreur interne');
   });

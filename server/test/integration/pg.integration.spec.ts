@@ -5,10 +5,15 @@
  * migrations font réellement ce qu'on croit. Un `ON CONFLICT` sur une colonne sans index unique
  * ne protège rien, et un `UPDATE ... WHERE statut` ne sérialise que si la base le sérialise.
  *
- * Démarrage :
- *   npm run db:up && npm run migrate -- <url> && npm run test:integration
+ * Démarrage, sans Docker :
+ *   npm run db:local                       (démarre PostgreSQL, crée les deux bases)
+ *   npm run migrate -- <DATABASE_URL_TEST>
+ *   npm run test:integration
  *
- * Sans `DATABASE_URL_TEST`, la suite est ignorée plutôt qu'en échec : un poste sans Docker ne
+ * La suite tourne sur `assurtrans_test`, jamais sur la base de développement : son `beforeEach`
+ * vide tout le référentiel, ce qui effacerait l'entité, le contrat et l'administrateur amorcés.
+ *
+ * Sans `DATABASE_URL_TEST`, la suite est ignorée plutôt qu'en échec : un poste sans base ne
  * doit pas voir rouge pour cette raison.
  */
 
@@ -58,11 +63,14 @@ decrire('intégration PostgreSQL', () => {
 
   beforeEach(async () => {
     // Table rase entre chaque test : l'ordre d'exécution ne doit rien changer au résultat.
+    // `audit_events` en fait partie : les règles DO INSTEAD NOTHING n'interceptent qu'UPDATE et
+    // DELETE, jamais TRUNCATE. Sans cela, le journal accumulerait les traces des tests
+    // précédents et celui qui compte ses lignes deviendrait dépendant de l'ordre.
     await pool.query(`
       TRUNCATE voucher_deliveries, fuel_vouchers, checkout_sessions, driver_payments,
                card_transactions, api_tokens, cards, drivers, stations,
                reconciliations, webhook_events, payment_intents, invoices,
-               te_contracts, wave_transactions, entities
+               te_contracts, wave_transactions, entities, audit_events
       RESTART IDENTITY CASCADE
     `);
 

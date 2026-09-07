@@ -280,7 +280,7 @@ export class PgPilotageRepository implements PilotageRepository {
          FROM payment_intents WHERE statut = 'NEEDS_REVIEW'
        UNION ALL
        SELECT 'ECART_RAPPROCHEMENT', COUNT(*)::int
-         FROM reconciliations WHERE statut <> 'MATCHED' AND resolu_a IS NULL
+         FROM reconciliations WHERE statut <> 'MATCHED' AND resolu_at IS NULL
        UNION ALL
        SELECT 'ENVOI_QR_ECHOUE', COUNT(*)::int
          FROM voucher_deliveries WHERE statut = 'ECHEC'`,
