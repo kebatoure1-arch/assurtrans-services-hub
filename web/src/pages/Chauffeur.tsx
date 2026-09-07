@@ -13,26 +13,9 @@ import QRCode from 'qrcode';
 import { ErreurApi, ErreurReseau, api, type Bon } from '../lib/api.ts';
 import { francs, jourEtHeure, restant } from '../lib/format.ts';
 import { useSession } from '../lib/session.tsx';
+import { enregistrerDernierBon, lireDernierBon } from '../lib/dernier-bon.ts';
 
 const MONTANTS_COURANTS = [5000, 10000, 20000];
-const CLE_DERNIER_BON = 'assurtrans.dernier-bon';
-
-function lireDernierBon(): Bon | null {
-  try {
-    const brut = localStorage.getItem(CLE_DERNIER_BON);
-    return brut === null ? null : (JSON.parse(brut) as Bon);
-  } catch {
-    return null;
-  }
-}
-
-function enregistrerDernierBon(bon: Bon): void {
-  try {
-    localStorage.setItem(CLE_DERNIER_BON, JSON.stringify(bon));
-  } catch {
-    // Le stockage peut être désactivé, le mode connecté reste utilisable.
-  }
-}
 
 function Ticket({ bon }: { bon: Bon }) {
   const [image, setImage] = useState<string | null>(null);
@@ -111,8 +94,14 @@ function Ticket({ bon }: { bon: Bon }) {
 export function Chauffeur() {
   const { session, fermer } = useSession();
   const jeton = session?.token ?? '';
+  const chauffeurId = session?.subject ?? '';
 
-  const [bons, setBons] = useState<Bon[] | null>(null);
+  // Le bon conserve s'affiche AVANT tout appel reseau : a la pompe, on ne fait pas attendre
+  // quelqu'un qui a deja paye.
+  const [bons, setBons] = useState<Bon[] | null>(() => {
+    const memoire = lireDernierBon(chauffeurId);
+    return memoire === null ? null : [memoire];
+  });
   const [erreur, setErreur] = useState<string | null>(null);
   const [montant, setMontant] = useState<number | null>(null);
   const [montantLibre, setMontantLibre] = useState('');
@@ -128,20 +117,34 @@ export function Chauffeur() {
   const charger = useCallback(async () => {
     try {
       const recents = await api.mesBons(jeton);
-      if (recents[0] !== undefined) enregistrerDernierBon(recents[0]);
+      const utilisable = recents.find(
+        (b) => b.statut === 'EMIS' && b.jeton !== null && Date.parse(b.expireA) > Date.now(),
+      );
+      // On garde le bon utilisable, et on efface des qu'il n'y en a plus : un bon consomme ne
+      // doit pas survivre en memoire locale.
+      enregistrerDernierBon(chauffeurId, utilisable ?? null);
       setBons(recents);
       setHorsLigne(false);
       setErreur(null);
     } catch (cause) {
-      setErreur(message(cause));
-      const dernier = lireDernierBon();
-      setBons((precedents) => precedents ?? (dernier === null ? [] : [dernier]));
+      const memoire = lireDernierBon(chauffeurId);
+      setBons((precedents) => precedents ?? (memoire === null ? [] : [memoire]));
       setHorsLigne(true);
+      // Hors ligne avec un bon en memoire, il n'y a rien a signaler comme erreur : le chauffeur
+      // a ce qu'il lui faut. Sans bon, en revanche, il faut le dire.
+      setErreur(memoire === null ? message(cause) : null);
     }
-  }, [jeton]);
+  }, [jeton, chauffeurId]);
 
   useEffect(() => {
     void charger();
+  }, [charger]);
+
+  // Le reseau revient : on rattrape sans que le chauffeur ait a y penser.
+  useEffect(() => {
+    const auRetour = () => void charger();
+    window.addEventListener('online', auRetour);
+    return () => window.removeEventListener('online', auRetour);
   }, [charger]);
 
   async function demanderBon() {
@@ -175,8 +178,15 @@ export function Chauffeur() {
       </header>
 
       <main className="vue">
-        {horsLigne && (
-          <p className="message info">Hors connexion : affichage du dernier bon connu seulement.</p>
+        {horsLigne && actif !== undefined && (
+          <p className="message info">
+            Sans connexion. Votre bon reste valable — c’est le pompiste qui le vérifie.
+          </p>
+        )}
+        {horsLigne && actif === undefined && (
+          <p className="message info">
+            Sans connexion. Reconnectez-vous au réseau pour demander un bon.
+          </p>
         )}
         {bons === null ? (
           <p className="chargement">Chargement…</p>
@@ -236,10 +246,10 @@ export function Chauffeur() {
             <button
               className="bouton"
               type="button"
-              disabled={enCours || !choixValide}
+              disabled={enCours || !choixValide || horsLigne}
               onClick={() => void demanderBon()}
             >
-              {enCours ? 'Ouverture du paiement…' : 'Payer'}
+              {enCours ? 'Ouverture du paiement…' : horsLigne ? 'Réseau requis pour payer' : 'Payer'}
             </button>
           </>
         )}

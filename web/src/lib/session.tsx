@@ -9,6 +9,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import type { Session } from './api.ts';
+import { oublierBons } from './dernier-bon.ts';
 
 const CLE = 'assurtrans.session';
 
@@ -53,6 +54,9 @@ export function FournisseurSession({ children }: { children: ReactNode }) {
     } catch {
       /* rien a faire */
     }
+    // Un bon est un titre de carburant : il ne reste pas sur un appareil que son proprietaire
+    // vient de quitter. Les telephones se pretent.
+    oublierBons();
     setSession(null);
   }, []);
 
