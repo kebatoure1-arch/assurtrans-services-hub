@@ -1080,6 +1080,120 @@ input {
   color: var(--brique);
 }
 
+/* ----------------------------------------------------------------- reglement */
+
+.reglement {
+  display: grid;
+  gap: 20px;
+}
+
+/*
+ * L'etat d'un reglement se lit d'un coup d'oeil. Quatre tons seulement : ce qui attend un
+ * geste, ce qui est parti, ce qui est clos, et ce qui reclame un examen. Onze couleurs pour
+ * onze statuts se retiendraient moins bien qu'aucune.
+ */
+.etat {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.etat.attente {
+  background: var(--beton);
+  color: var(--encre-douce);
+}
+
+.etat.parti {
+  background: var(--ambre-clair);
+  color: var(--ambre);
+}
+
+.etat.fini {
+  background: var(--vert-clair);
+  color: var(--vert);
+}
+
+.etat.grave {
+  background: var(--brique-clair);
+  color: var(--brique);
+}
+
+.tableau-large td.actions .raison {
+  display: block;
+  margin-top: 4px;
+  max-width: 24ch;
+  color: var(--encre-douce);
+  line-height: 1.35;
+}
+
+/* Le seul bouton de l'application d'ou de l'argent sort. Il ne ressemble a aucun autre. */
+.bouton-compact.danger {
+  background: var(--brique);
+  border-color: var(--brique);
+  color: var(--craie);
+}
+
+.bouton-compact.danger:hover {
+  background: #8d2a19;
+}
+
+/*
+ * La confirmation prend l'ecran. Ce n'est pas une fioriture : c'est le geste le plus dangereux
+ * de l'application, et il ne doit pas se faire en meme temps qu'autre chose.
+ */
+.confirmation {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--marge);
+  background: rgb(15 38 32 / 55%);
+  z-index: 10;
+}
+
+.confirmation form {
+  width: min(440px, 100%);
+  padding: 28px;
+  border-radius: var(--rayon);
+  background: var(--craie);
+  box-shadow: 0 24px 60px rgb(15 38 32 / 28%);
+}
+
+.confirmation h2 {
+  margin: 0 0 4px;
+  font-family: var(--display);
+  font-size: 20px;
+}
+
+.confirmation .somme-confirmation {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 40px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.confirmation .chapo {
+  margin: 6px 0 18px;
+}
+
+.actions-confirmation {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.actions-confirmation .bouton {
+  flex: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;

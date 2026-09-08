@@ -1,17 +1,18 @@
 /**
  * Coque de l'espace d'administration.
  *
- * Deux sections seulement, et dans cet ordre : ce qui demande une décision, puis ce qu'on tient
- * à jour. Un menu de dix entrées ferait perdre plus de temps qu'il n'en ferait gagner à trois
- * personnes qui ouvrent l'outil pour une raison précise.
+ * Trois sections, dans cet ordre : ce qu'on regarde, ce qu'on décide, ce qu'on tient à jour.
+ * Un menu de dix entrées ferait perdre plus de temps qu'il n'en ferait gagner à trois personnes
+ * qui ouvrent l'outil pour une raison précise.
  */
 
 import { useState } from 'react';
 import { Pilotage } from './admin/Pilotage.tsx';
+import { Reglement } from './admin/Reglement.tsx';
 import { Referentiel } from './admin/Referentiel.tsx';
 import { useSession } from '../lib/session.tsx';
 
-type Section = 'pilotage' | 'referentiel';
+type Section = 'pilotage' | 'reglement' | 'referentiel';
 
 export function Admin() {
   const { session, fermer } = useSession();
@@ -26,6 +27,7 @@ export function Admin() {
           {(
             [
               ['pilotage', 'Pilotage'],
+              ['reglement', 'Règlement'],
               ['referentiel', 'Référentiel'],
             ] as const
           ).map(([cle, libelle]) => (
@@ -49,7 +51,9 @@ export function Admin() {
       </header>
 
       <main className="vue-bureau">
-        {section === 'pilotage' ? <Pilotage /> : <Referentiel />}
+        {section === 'pilotage' && <Pilotage />}
+        {section === 'reglement' && <Reglement />}
+        {section === 'referentiel' && <Referentiel />}
       </main>
     </div>
   );

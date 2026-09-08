@@ -113,6 +113,52 @@ export interface FicheOperateur {
   readonly statut: StatutFiche;
 }
 
+export type StatutFacture = 'OUVERTE' | 'ORDONNANCEE' | 'REGLEE' | 'LETTREE' | 'LITIGE';
+
+export interface Facture {
+  readonly id: string;
+  readonly contractId: string;
+  readonly numero: string;
+  readonly periodeDebut: string;
+  readonly periodeFin: string;
+  /** Entier de francs. Aucun centime : le franc CFA n'a pas de subdivision. */
+  readonly montant: number;
+  readonly dateEmission: string;
+  readonly dateEcheance: string;
+  readonly statut: StatutFacture;
+}
+
+export type StatutReglement =
+  | 'DRAFT'
+  | 'PENDING_APPROVAL'
+  | 'APPROVED'
+  | 'DISPATCHING'
+  | 'SENT'
+  | 'SETTLED'
+  | 'RECONCILED'
+  | 'NEEDS_REVIEW'
+  | 'FAILED'
+  | 'VARIANCE'
+  | 'CANCELLED';
+
+export interface Reglement {
+  readonly id: string;
+  readonly invoiceId: string;
+  readonly montant: number;
+  readonly statut: StatutReglement;
+  readonly canal: 'DRY_RUN' | 'B2B' | 'MOBILE';
+  readonly referenceImputation: string;
+  readonly idempotencyKey: string | null;
+  readonly wavePayoutId: string | null;
+  readonly preparePar: string;
+  readonly approuvePar: string | null;
+  readonly executePar: string | null;
+  readonly motifReview: string | null;
+  readonly montantRegle: number | null;
+  /** Signe : `attendu - constate`. Positif = on a regle MOINS que du. */
+  readonly ecartXof: number | null;
+}
+
 export interface EtatPilotage {
   readonly contrat: {
     readonly numeroCompte: string;
@@ -180,6 +226,54 @@ export const api = {
   chauffeurs: (jeton: string) => appeler<FicheChauffeur[]>('/api/admin/drivers', { jeton }),
   stations: (jeton: string) => appeler<FicheStation[]>('/api/admin/stations', { jeton }),
   operateurs: (jeton: string) => appeler<FicheOperateur[]>('/api/admin/operators', { jeton }),
+
+  factures: (jeton: string) => appeler<Facture[]>('/api/admin/factures', { jeton }),
+
+  enregistrerFacture: (
+    jeton: string,
+    facture: {
+      numero: string;
+      periodeDebut: string;
+      periodeFin: string;
+      montantXof: number;
+      dateEmission: string;
+      dateEcheance: string;
+    },
+  ) => appeler<Facture>('/api/admin/factures', { methode: 'POST', corps: facture, jeton }),
+
+  reglements: (jeton: string) => appeler<Reglement[]>('/api/admin/reglements', { jeton }),
+
+  // Le montant n'est jamais transmis : il vient de la facture, cote serveur.
+  preparerReglement: (jeton: string, invoiceId: string) =>
+    appeler<Reglement>('/api/admin/reglements', {
+      methode: 'POST',
+      corps: { invoiceId },
+      jeton,
+    }),
+
+  /**
+   * Les gestes du cycle. L'acteur n'est jamais transmis : le serveur le lit dans le jeton,
+   * sinon la separation des roles se contournerait en envoyant le nom d'un collegue.
+   */
+  gesteReglement: (
+    jeton: string,
+    id: string,
+    geste: 'soumettre' | 'approuver' | 'annuler' | 'rapprocher',
+  ) => appeler<Reglement>(`/api/admin/reglements/${id}/${geste}`, { methode: 'POST', jeton }),
+
+  /** Envoie un code au numero enregistre de l'operateur connecte. */
+  demanderConfirmation: (jeton: string, id: string) =>
+    appeler<{ valideSecondes: number; code?: string }>(
+      `/api/admin/reglements/${id}/confirmation`,
+      { methode: 'POST', jeton },
+    ),
+
+  executerReglement: (jeton: string, id: string, code: string) =>
+    appeler<Reglement>(`/api/admin/reglements/${id}/executer`, {
+      methode: 'POST',
+      corps: { code },
+      jeton,
+    }),
 
   creerChauffeur: (jeton: string, corps: { nom: string; telephone: string }) =>
     appeler<FicheChauffeur>('/api/admin/drivers', { methode: 'POST', corps, jeton }),
