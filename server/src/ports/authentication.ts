@@ -50,4 +50,13 @@ export interface AnnuaireComptes {
     readonly role: ApiRole;
     readonly stationId: string | null;
   } | null>;
+
+  /**
+   * Le sens inverse : a quel numero joindre ce compte ?
+   *
+   * Sert a la seconde authentification avant un mouvement d'argent. Le numero doit venir de la
+   * base, jamais de la requete : accepter un numero fourni par l'appelant reviendrait a le
+   * laisser choisir ou son propre second facteur est envoye.
+   */
+  msisdnDe(subject: string): Promise<string | null>;
 }

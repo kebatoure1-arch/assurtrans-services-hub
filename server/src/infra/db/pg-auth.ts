@@ -128,4 +128,15 @@ export class PgAnnuaireComptes implements AnnuaireComptes {
 
     return null;
   }
+
+  async msisdnDe(subject: string): Promise<string | null> {
+    const r = await this.db.query(
+      `SELECT msisdn FROM operateurs WHERE id = $1 AND statut = 'ACTIF'
+       UNION ALL
+       SELECT msisdn FROM drivers    WHERE id = $1 AND statut = 'ACTIF'
+       LIMIT 1`,
+      [subject],
+    );
+    return r.rows.length === 0 ? null : String(r.rows[0].msisdn);
+  }
 }

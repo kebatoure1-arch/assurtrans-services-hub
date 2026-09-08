@@ -48,6 +48,20 @@ export class IntentionIntrouvableError extends Error {
 }
 
 /**
+ * Le numéro de facture est déjà pris sur ce contrat.
+ *
+ * Distinct de `ConcurrenceError` : ce n'est pas une course, c'est une saisie qui fait doublon.
+ * L'une se résout en relisant, l'autre en corrigeant le numéro — les confondre laisserait
+ * l'administrateur recliquer sur un bouton qui ne marchera jamais.
+ */
+export class NumeroFactureDejaUtiliseError extends Error {
+  constructor(numero: string) {
+    super(`une facture porte déjà le numéro « ${numero} » sur ce contrat`);
+    this.name = 'NumeroFactureDejaUtiliseError';
+  }
+}
+
+/**
  * Une écriture conditionnelle a été refusée : l'état en base n'est plus celui qu'on avait lu.
  *
  * Ce n'est pas une erreur technique à réessayer. C'est le signe qu'une autre personne agit sur
@@ -84,11 +98,7 @@ export class CycleReglement {
   /** Enregistre une facture reçue du fournisseur. Aucun règlement ne part hors facture (ADR-001). */
   async enregistrerFacture(facture: Invoice): Promise<Invoice> {
     const pose = await this.deps.factures.saveIfNew(facture);
-    if (!pose) {
-      throw new ConcurrenceError(
-        `une facture porte déjà le numéro « ${facture.numero} » sur ce contrat`,
-      );
-    }
+    if (!pose) throw new NumeroFactureDejaUtiliseError(facture.numero);
     await this.tracer('FACTURE_ENREGISTREE', 'invoice', facture.id, 'systeme', {
       numero: facture.numero,
       montant: facture.montant,

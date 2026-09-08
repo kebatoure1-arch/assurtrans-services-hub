@@ -162,6 +162,9 @@ const ANNUAIRE_TEST: AnnuaireComptes = {
     }
     return null;
   },
+  async msisdnDe(subject) {
+    return subject === 'chauffeur-7' ? '+221770000001' : null;
+  },
 };
 
 class EmetteurTest implements ApiTokenIssuer {

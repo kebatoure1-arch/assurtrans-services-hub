@@ -115,6 +115,52 @@ export class AuthenticateByPhone {
     };
   }
 
+  /**
+   * Envoie un code au titulaire du compte, pour confirmer une action sensible.
+   *
+   * Le numero vient de la base, jamais de la requete : sinon l'appelant choisirait ou son
+   * propre second facteur est envoye, ce qui n'en serait plus un.
+   */
+  async demanderConfirmation(subject: string, asOf: string): Promise<DemandeResult> {
+    const msisdn = await this.deps.annuaire.msisdnDe(subject);
+    if (msisdn === null) throw new AuthentificationRefuseeError('compte introuvable');
+    return this.demanderCode(msisdn, asOf);
+  }
+
+  /**
+   * Seconde authentification avant un mouvement d'argent (§9).
+   *
+   * Consomme un code frais sans emettre de jeton : ce n'est pas une ouverture de session, c'est
+   * la confirmation d'un geste precis. Le defi est consomme, donc le meme code ne peut pas
+   * autoriser deux virements.
+   *
+   * Ne rend rien et leve en cas d'echec : un booleen se teste mal, et un `if` oublie autoriserait
+   * l'envoi.
+   */
+  async confirmerAction(subject: string, code: string, asOf: string): Promise<void> {
+    const msisdn = await this.deps.annuaire.msisdnDe(subject);
+    if (msisdn === null) throw new AuthentificationRefuseeError('compte introuvable');
+
+    const challenge = await this.deps.challenges.trouverVivant(msisdn);
+    if (challenge === null) {
+      throw new AuthentificationRefuseeError('aucun code de confirmation en cours');
+    }
+
+    try {
+      const consommation = consommerCode(challenge, empreinteCode(msisdn, String(code)), asOf);
+      await this.deps.challenges.majTentative(consommation.challenge);
+    } catch (cause) {
+      if (cause instanceof CodeIncorrectError) {
+        await this.deps.challenges.majTentative(cause.challenge);
+        throw new AuthentificationRefuseeError(cause.message);
+      }
+      if (cause instanceof CodeExpireError || cause instanceof TropDeTentativesError) {
+        throw new AuthentificationRefuseeError(cause.message);
+      }
+      throw cause;
+    }
+  }
+
   async ouvrirSession(msisdnSaisi: string, code: string, asOf: string): Promise<SessionAccordee> {
     const msisdn = normaliserMsisdn(msisdnSaisi);
 

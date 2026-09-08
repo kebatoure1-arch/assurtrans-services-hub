@@ -33,6 +33,7 @@ import {
   ConcurrenceError,
   FactureIntrouvableError,
   IntentionIntrouvableError,
+  NumeroFactureDejaUtiliseError,
 } from '../src/application/settlement/cycle-reglement.ts';
 
 const CONTRAT = 'contrat-1';
@@ -438,8 +439,9 @@ describe('enregistrement d’une facture', () => {
   it('refuse deux fois le même numéro sur un contrat', async () => {
     await cycle.enregistrerFacture({ ...facture(), id: 'f-1' });
 
+    // Un doublon de numero n'est pas une course : il se corrige, il ne se relit pas.
     await expect(cycle.enregistrerFacture({ ...facture(), id: 'f-2' })).rejects.toThrow(
-      ConcurrenceError,
+      NumeroFactureDejaUtiliseError,
     );
     expect(factures.lignes.size).toBe(1);
   });

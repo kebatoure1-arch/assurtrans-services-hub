@@ -20,6 +20,11 @@ const CONTRAT: ContratTe = {
   seuilAlertePct: 70,
   seuilBlocagePct: 90,
   canalReglement: 'DRY_RUN',
+  // Les trois parametres bloquants du §14 restent absents : c'est l'etat reel du contrat
+  // aujourd'hui, et c'est ce qui interdit tout canal autre que DRY_RUN.
+  teB2bId: null,
+  teMsisdn: null,
+  referenceImputation: null,
 };
 
 function contrats(contrat: ContratTe | null = CONTRAT): ContratRepository {

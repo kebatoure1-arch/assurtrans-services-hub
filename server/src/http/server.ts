@@ -51,6 +51,19 @@ import {
 import type { TableauDeBord } from '../application/admin/tableau-de-bord.ts';
 import type { AuditLogger } from '../ports/audit.ts';
 import {
+  ConcurrenceError,
+  CycleReglement,
+  FactureIntrouvableError,
+  IntentionIntrouvableError,
+  NumeroFactureDejaUtiliseError,
+} from '../application/settlement/cycle-reglement.ts';
+import {
+  InvalidTransitionError,
+  LimitExceededError,
+  SecondFactorRequiredError,
+  SegregationOfDutiesError,
+} from '../domain/payment-intent.ts';
+import {
   AuthenticateByPhone,
   AuthentificationRefuseeError,
   TropDeDemandesError,
@@ -84,6 +97,13 @@ export interface ServerDeps {
   readonly tableauDeBord?: TableauDeBord;
   /** Trace des actions sensibles hors referentiel : encaissement, consommation. */
   readonly audit?: AuditLogger;
+  /**
+   * Cycle de reglement TotalEnergies. Optionnel comme le referentiel : sans base, les routes
+   * repondent 503 plutot que d'empecher le demarrage.
+   */
+  readonly reglement?: CycleReglement;
+  /** Contrat servi par ce deploiement. Les listes de factures et d'intentions s'y rapportent. */
+  readonly contractId?: string;
 }
 
 declare module 'fastify' {
@@ -134,6 +154,29 @@ const CorpsNouvelleStation = z.object({
   code: z.string().trim().min(1).max(64),
   nom: z.string().trim().min(1).max(160),
   ville: z.string().trim().max(160).nullable().optional(),
+});
+
+/**
+ * Une facture arrive du fournisseur. Les dates sont des jours, sans heure : une facture porte
+ * une periode et une echeance, pas un instant.
+ */
+const CorpsNouvelleFacture = z.object({
+  numero: z.string().trim().min(1).max(64),
+  periodeDebut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  periodeFin: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // Entier de francs. Aucun centime, aucun flottant : le franc CFA n'a pas de subdivision.
+  montantXof: z.number().int().positive(),
+  dateEmission: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dateEcheance: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+const CorpsPreparation = z.object({
+  invoiceId: z.string().uuid(),
+});
+
+/** L'execution exige un code frais, envoye au numero enregistre de l'operateur (§9). */
+const CorpsExecution = z.object({
+  code: z.string().regex(/^\d{6}$/),
 });
 
 const CorpsNouvelOperateur = z.object({
@@ -436,6 +479,208 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   // ------------------------------------------------------------- encaissement
 
+  // ------------------------------------------------------- reglement TotalEnergies
+
+  /**
+   * Traduit les refus du cycle en codes stables.
+   *
+   * Chaque cas appelle une conduite differente cote interface : 409 « quelqu'un est passe
+   * avant, relisez », 403 « il faut quelqu'un d'autre », 428 « confirmez par code ». Un 500
+   * generique laisserait l'administrateur cliquer a nouveau sur un bouton qui ne marchera pas.
+   */
+  function refusReglement(reply: FastifyReply, cause: unknown): FastifyReply | null {
+    if (cause instanceof NumeroFactureDejaUtiliseError) {
+      return refus(reply, 409, 'NUMERO_DEJA_UTILISE');
+    }
+    if (cause instanceof ConcurrenceError) {
+      return refus(reply, 409, 'ETAT_MODIFIE');
+    }
+    if (cause instanceof SegregationOfDutiesError) {
+      return refus(reply, 403, 'SEPARATION_DES_ROLES');
+    }
+    if (cause instanceof SecondFactorRequiredError) {
+      return refus(reply, 428, 'CONFIRMATION_REQUISE');
+    }
+    if (cause instanceof LimitExceededError) {
+      return refus(reply, 409, 'PLAFOND_DEPASSE');
+    }
+    if (cause instanceof FactureIntrouvableError || cause instanceof IntentionIntrouvableError) {
+      return refus(reply, 404, 'INTROUVABLE');
+    }
+    if (cause instanceof InvalidTransitionError) {
+      return refus(reply, 409, 'TRANSITION_INTERDITE');
+    }
+    if (cause instanceof AuthentificationRefuseeError) {
+      return refus(reply, 401, 'CODE_REFUSE');
+    }
+    return null;
+  }
+
+  async function avecReglement<T>(
+    reply: FastifyReply,
+    bloc: (cycle: CycleReglement, contractId: string) => Promise<T>,
+  ): Promise<T | FastifyReply> {
+    if (deps.reglement === undefined || deps.contractId === undefined) {
+      return erreur(reply, 503, 'cycle de reglement indisponible');
+    }
+    try {
+      return await bloc(deps.reglement, deps.contractId);
+    } catch (cause) {
+      const r = refusReglement(reply, cause);
+      if (r !== null) return r;
+      throw cause;
+    }
+  }
+
+  app.get('/api/admin/factures', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    return avecReglement(reply, async (cycle, contractId) =>
+      reply.send(await cycle.listerFactures(contractId)),
+    );
+  });
+
+  app.post('/api/admin/factures', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+
+    const corps = CorpsNouvelleFacture.safeParse(req.body);
+    if (!corps.success) return erreur(reply, 400, 'facture incomplete');
+    if (corps.data.periodeDebut > corps.data.periodeFin) {
+      return erreur(reply, 400, 'periode inversee');
+    }
+    if (corps.data.dateEcheance < corps.data.dateEmission) {
+      return erreur(reply, 400, 'echeance anterieure a l emission');
+    }
+
+    return avecReglement(reply, async (cycle, contractId) => {
+      const facture = await cycle.enregistrerFacture({
+        id: deps.ids.next(),
+        contractId,
+        numero: corps.data.numero,
+        periodeDebut: corps.data.periodeDebut,
+        periodeFin: corps.data.periodeFin,
+        montant: xof(corps.data.montantXof),
+        dateEmission: corps.data.dateEmission,
+        dateEcheance: corps.data.dateEcheance,
+        statut: 'OUVERTE',
+      });
+      return reply.code(201).send(facture);
+    });
+  });
+
+  app.get('/api/admin/reglements', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    return avecReglement(reply, async (cycle, contractId) =>
+      reply.send(await cycle.listerIntentions(contractId)),
+    );
+  });
+
+  app.post('/api/admin/reglements', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+
+    const corps = CorpsPreparation.safeParse(req.body);
+    if (!corps.success) return erreur(reply, 400, 'identifiant de facture attendu');
+
+    // Le montant ne figure pas dans le corps, et n'y figurera jamais : il vient de la facture.
+    // Une interface qui pourrait proposer son propre montant serait une interface qui decide
+    // de ce qu'on paie.
+    return avecReglement(reply, async (cycle) => {
+      const intent = await cycle.preparer({
+        invoiceId: corps.data.invoiceId,
+        acteur: principal.subject,
+      });
+      return reply.code(201).send(intent);
+    });
+  });
+
+  app.post<{ Params: { id: string } }>(
+    '/api/admin/reglements/:id/soumettre',
+    async (req, reply) => {
+      const principal = await exigerRole(req, reply, ['ADMIN']);
+      if (principal === null) return reply;
+      return avecReglement(reply, async (cycle) =>
+        reply.send(await cycle.soumettre({ intentId: req.params.id, acteur: principal.subject })),
+      );
+    },
+  );
+
+  app.post<{ Params: { id: string } }>('/api/admin/reglements/:id/approuver', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    // L'acteur vient du jeton, jamais du corps : sinon la separation des roles se contournerait
+    // en envoyant le nom d'un collegue.
+    return avecReglement(reply, async (cycle) =>
+      reply.send(await cycle.approuver({ intentId: req.params.id, acteur: principal.subject })),
+    );
+  });
+
+  app.post<{ Params: { id: string } }>('/api/admin/reglements/:id/annuler', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    return avecReglement(reply, async (cycle) =>
+      reply.send(await cycle.annuler({ intentId: req.params.id, acteur: principal.subject })),
+    );
+  });
+
+  /**
+   * Envoie le code de confirmation avant execution.
+   *
+   * Le numero destinataire vient de la base, pas de la requete : laisser l'appelant choisir ou
+   * son second facteur arrive reviendrait a ne plus en avoir.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/api/admin/reglements/:id/confirmation',
+    async (req, reply) => {
+      const principal = await exigerRole(req, reply, ['ADMIN']);
+      if (principal === null) return reply;
+
+      return avecReglement(reply, async () => {
+        const r = await deps.auth.demanderConfirmation(principal.subject, deps.horloge());
+        return reply.code(202).send(r);
+      });
+    },
+  );
+
+  /**
+   * Execute le versement.
+   *
+   * Deux verrous en amont de l'appel sortant : le code frais consomme ici, et la separation des
+   * roles verifiee par le domaine. Le code est consomme AVANT l'envoi — un code qui resterait
+   * utilisable apres un premier virement en autoriserait un second.
+   */
+  app.post<{ Params: { id: string } }>('/api/admin/reglements/:id/executer', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+
+    const corps = CorpsExecution.safeParse(req.body);
+    if (!corps.success) return refus(reply, 428, 'CONFIRMATION_REQUISE');
+
+    return avecReglement(reply, async (cycle) => {
+      await deps.auth.confirmerAction(principal.subject, corps.data.code, deps.horloge());
+
+      const intent = await cycle.executer({
+        intentId: req.params.id,
+        acteur: principal.subject,
+        secondFactorVerifie: true,
+      });
+      return reply.send(intent);
+    });
+  });
+
+  app.post<{ Params: { id: string } }>(
+    '/api/admin/reglements/:id/rapprocher',
+    async (req, reply) => {
+      const principal = await exigerRole(req, reply, ['ADMIN']);
+      if (principal === null) return reply;
+      return avecReglement(reply, async (cycle) =>
+        reply.send(await cycle.rapprocher({ intentId: req.params.id, acteur: principal.subject })),
+      );
+    },
+  );
+
   app.post('/api/paiements/session', async (req, reply) => {
     const principal = await exigerRole(req, reply, ['DRIVER', 'ADMIN']);
     if (principal === null) return reply;
@@ -490,7 +735,17 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       targetId: reference,
       payload: { montantXof: montant, canal: deps.encaissement.canal },
     });
-    return reply.code(201).send({ reference, urlPaiement: resultat.launchUrl, montantXof: montant });
+    // Le canal est annonce au front. En DRY_RUN, `launchUrl` pointe volontairement vers un
+    // domaine `.invalid`, qui ne peut par construction jamais resoudre : c'est ce qui garantit
+    // qu'une URL de demonstration ne sera jamais prise pour une vraie page de paiement. Restait
+    // a le DIRE — sans quoi l'interface y envoyait le chauffeur, qui tombait sur une erreur de
+    // navigateur et croyait le service en panne.
+    return reply.code(201).send({
+      reference,
+      urlPaiement: resultat.launchUrl,
+      montantXof: montant,
+      canal: deps.encaissement.canal,
+    });
   });
 
   // ------------------------------------------------------------- webhook

@@ -37,7 +37,12 @@ describe('sans bon en cours', () => {
   it('envoie le montant choisi et emmène le chauffeur payer', async () => {
     serveur.repond('POST /api/paiements/session', {
       statut: 201,
-      corps: { reference: 'REF-1', urlPaiement: 'https://pay.test/1', montantXof: 20000 },
+      corps: {
+        reference: 'REF-1',
+        urlPaiement: 'https://pay.test/1',
+        montantXof: 20000,
+        canal: 'WAVE_CHECKOUT',
+      },
     });
     render(<App />);
 
@@ -48,6 +53,32 @@ describe('sans bon en cours', () => {
       expect(serveur.appelsVers('/api/paiements/session')).toHaveLength(1);
     });
     expect(serveur.appelsVers('/api/paiements/session')[0].corps).toEqual({ montantXof: 20000 });
+  });
+
+  it('dit que rien n’a été prélevé quand aucun encaissement n’est branché', async () => {
+    // En DRY_RUN le serveur rend une URL vers un domaine `.invalid`, qui ne resout jamais.
+    // Y envoyer le chauffeur lui montrait une erreur de navigateur, et il croyait le service
+    // en panne. Un lien mort est pire qu'une phrase honnete.
+    serveur.repond('POST /api/paiements/session', {
+      statut: 201,
+      corps: {
+        reference: 'DRYRUN-1',
+        urlPaiement: 'https://dry-run.invalid/checkout/DRYRUN-1',
+        montantXof: 20000,
+        canal: 'DRY_RUN',
+      },
+    });
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^20\s000$/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Payer' }));
+
+    // `findByText` rend le <strong> qui porte le titre ; l'avis complet est le paragraphe.
+    const avis = (await screen.findByText(/paiement non branché/i)).closest('p');
+    expect(avis).toHaveTextContent('DRYRUN-1');
+    expect(avis).toHaveTextContent(/aucun bon ne sera émis/i);
+    // On reste dans l'application : aucune navigation vers l'URL morte.
+    expect(window.location.href).not.toContain('dry-run.invalid');
   });
 
   it('n’active Payer qu’une fois un montant choisi', async () => {

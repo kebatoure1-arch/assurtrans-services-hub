@@ -169,7 +169,8 @@ export class PgContratRepository implements ContratRepository {
   async courant(entityId: string): Promise<ContratTe | null> {
     const r = await this.db.query(
       `SELECT id, numero_compte_te, encours_autorise, delai_reglement_jours,
-              seuil_alerte_pct, seuil_blocage_pct, canal_reglement
+              seuil_alerte_pct, seuil_blocage_pct, canal_reglement,
+              te_b2b_id, te_msisdn, reference_imputation
          FROM te_contracts
         WHERE entity_id = $1
         ORDER BY created_at DESC
@@ -187,6 +188,9 @@ export class PgContratRepository implements ContratRepository {
       seuilAlertePct: entier(l.seuil_alerte_pct),
       seuilBlocagePct: entier(l.seuil_blocage_pct),
       canalReglement: texte(l.canal_reglement) as ContratTe['canalReglement'],
+      teB2bId: texteOuNull(l.te_b2b_id),
+      teMsisdn: texteOuNull(l.te_msisdn),
+      referenceImputation: texteOuNull(l.reference_imputation),
     };
   }
 }

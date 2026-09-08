@@ -53,6 +53,11 @@ const ANNUAIRE: AnnuaireComptes = {
     }
     return null;
   },
+  async msisdnDe(subject) {
+    if (subject === 'chauffeur-7') return '+221770000001';
+    if (subject === 'pompiste-12') return '+221770000002';
+    return null;
+  },
 };
 
 class Jetons implements ApiTokenIssuer {

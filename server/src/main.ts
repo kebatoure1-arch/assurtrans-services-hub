@@ -38,6 +38,12 @@ import {
 import { ManageDirectory } from './application/admin/manage-directory.ts';
 import { TableauDeBord } from './application/admin/tableau-de-bord.ts';
 import { PgAuditLogger } from './infra/audit/audit-logger.ts';
+import { CycleReglement } from './application/settlement/cycle-reglement.ts';
+import {
+  PgInvoiceRepository,
+  PgPaymentIntentRepository,
+} from './infra/db/pg-settlement.ts';
+import { resolveSettlementChannel } from './infra/wave/resolve-channel.ts';
 import { CachingSecretProvider, EnvSecretProvider } from './infra/secrets/secrets.ts';
 import { VoucherSigner } from './infra/security/voucher-signature.ts';
 import { WebhookDeduplicator, WebhookVerifier } from './infra/webhooks/webhook.ts';
@@ -85,6 +91,20 @@ async function main(): Promise<void> {
     }
     return { status: reponse.status, body: corps };
   };
+
+  // Le contrat porte le canal de reglement et le beneficiaire. On le lit AVANT de construire
+  // le serveur : sans contrat, le cycle de reglement n'existe pas et ses routes repondent 503,
+  // plutot que d'accepter une intention qui n'aurait nulle part ou aller.
+  const contrat = await new PgContratRepository(db).courant(config.entityId);
+  const canalReglement = resolveSettlementChannel(
+    {
+      canal: contrat?.canalReglement ?? config.canalParDefaut,
+      teB2bId: contrat?.teB2bId ?? null,
+      teMsisdn: contrat?.teMsisdn ?? null,
+    },
+    config.wave,
+    transport,
+  );
 
   const app = buildServer({
     encaissement: resolveCollectionChannel(
@@ -146,6 +166,25 @@ async function main(): Promise<void> {
       entityId: config.entityId,
       fenetreJours: config.fenetreConsommationJours,
     }),
+    contractId: contrat?.id,
+    reglement:
+      contrat === null
+        ? undefined
+        : new CycleReglement({
+            factures: new PgInvoiceRepository(db),
+            intentions: new PgPaymentIntentRepository(db),
+            canal: canalReglement,
+            limites: config.plafonds,
+            // Tant que TotalEnergies n'a pas fourni le format de sa reference d'imputation
+            // (§14, parametre 2), on emet une reference lisible portant notre identite et le
+            // numero de facture. Le canal reste DRY_RUN d'ici la : aucune reference
+            // approximative ne part chez le fournisseur.
+            referenceImputation: contrat.referenceImputation ?? 'ASSURTRANS/{numero}',
+            horloge: () => new Date().toISOString(),
+            nouvelId: () => uuid.next(),
+            nouvelleCle: () => uuid.next(),
+            audit: new PgAuditLogger(db),
+          }),
   });
 
   await app.listen({ port: config.port, host: '0.0.0.0' });

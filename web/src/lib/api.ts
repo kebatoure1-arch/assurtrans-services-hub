@@ -166,10 +166,13 @@ export const api = {
   mesBons: (jeton: string) => appeler<Bon[]>('/api/bons', { jeton }),
 
   ouvrirPaiement: (jeton: string, montantXof: number) =>
-    appeler<{ reference: string; urlPaiement: string; montantXof: number }>(
-      '/api/paiements/session',
-      { methode: 'POST', corps: { montantXof }, jeton },
-    ),
+    appeler<{
+      reference: string;
+      urlPaiement: string;
+      montantXof: number;
+      /** `DRY_RUN` : aucun encaissement reel, l'URL rendue ne mene nulle part. */
+      canal: 'DRY_RUN' | 'WAVE_CHECKOUT';
+    }>('/api/paiements/session', { methode: 'POST', corps: { montantXof }, jeton }),
 
   tableauDeBord: (jeton: string) =>
     appeler<EtatPilotage>('/api/admin/tableau-de-bord', { jeton }),

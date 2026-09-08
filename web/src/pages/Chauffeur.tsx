@@ -119,6 +119,8 @@ export function Chauffeur() {
     return memoire === null ? null : [memoire];
   });
   const [erreur, setErreur] = useState<string | null>(null);
+  /** Reference de la session ouverte a blanc, quand aucun encaissement reel n'est branche. */
+  const [enBlanc, setEnBlanc] = useState<string | null>(null);
   const [montant, setMontant] = useState<number | null>(null);
   const [montantLibre, setMontantLibre] = useState('');
   const [enCours, setEnCours] = useState(false);
@@ -169,8 +171,20 @@ export function Chauffeur() {
 
     setEnCours(true);
     setErreur(null);
+    setEnBlanc(null);
     try {
       const r = await api.ouvrirPaiement(jeton, valeur);
+
+      // En DRY_RUN, l'URL rendue pointe vers un domaine `.invalid` qui ne resout jamais — c'est
+      // voulu : rien ne doit ressembler a une page de paiement tant qu'aucun encaissement reel
+      // n'est branche. Y envoyer le chauffeur lui montrerait une erreur de navigateur et lui
+      // ferait croire le service en panne. On le dit, plutot.
+      if (r.canal === 'DRY_RUN') {
+        setEnBlanc(r.reference);
+        setEnCours(false);
+        return;
+      }
+
       // Le paiement se fait chez l'operateur : on quitte l'application pour y aller.
       window.location.href = r.urlPaiement;
     } catch (cause) {
@@ -194,6 +208,14 @@ export function Chauffeur() {
       </header>
 
       <main className="vue">
+        {enBlanc !== null && (
+          <p className="message info">
+            <strong>Paiement non branché.</strong> Aucun encaissement réel n’est configuré sur ce
+            serveur : votre demande de {francs(valeurChoisie)} a été enregistrée sous la
+            référence {enBlanc}, mais aucun montant n’a été prélevé et aucun bon ne sera émis.
+          </p>
+        )}
+
         {horsLigne && actif !== undefined && (
           <p className="message info">
             Sans connexion. Votre bon reste valable — c’est le pompiste qui le vérifie.

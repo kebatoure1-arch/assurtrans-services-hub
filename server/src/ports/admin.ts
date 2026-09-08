@@ -63,6 +63,17 @@ export interface ContratTe {
   readonly seuilAlertePct: number;
   readonly seuilBlocagePct: number;
   readonly canalReglement: 'DRY_RUN' | 'B2B' | 'MOBILE';
+  /**
+   * Beneficiaire designe par TotalEnergies, selon le canal retenu. `null` tant que le parametre
+   * n'a pas ete obtenu par ecrit (§14, parametre 1) — auquel cas seul DRY_RUN est possible.
+   */
+  readonly teB2bId: string | null;
+  readonly teMsisdn: string | null;
+  /**
+   * Gabarit de la reference d'imputation attendue par le fournisseur, `{numero}` valant le
+   * numero de facture. `null` tant que TE n'a pas fourni son format (§14, parametre 2).
+   */
+  readonly referenceImputation: string | null;
 }
 
 export interface ContratRepository {
