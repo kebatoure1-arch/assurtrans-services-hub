@@ -4,9 +4,9 @@ Trois suites, trois choses différentes prouvées. Aucune ne remplace les autres
 
 | Suite | Ce qu'elle prouve | Ce qu'elle ne peut pas prouver |
 |---|---|---|
-| Serveur — 274 tests | le domaine, les cas d'usage, les routes HTTP | que le SQL s'exécute |
-| Intégration — 40 tests | que les contraintes des migrations tiennent | ce que l'utilisateur voit |
-| Interface — 64 tests | ce qu'un écran affiche et ce qu'il transmet | le comportement du vrai serveur |
+| Serveur — 297 tests | le domaine, les cas d'usage, les routes HTTP | que le SQL s'exécute |
+| Intégration — 60 tests | que les contraintes des migrations tiennent | ce que l'utilisateur voit |
+| Interface — 87 tests | ce qu'un écran affiche et ce qu'il transmet | le comportement du vrai serveur |
 
 ## Serveur
 

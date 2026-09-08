@@ -9,7 +9,7 @@ depuis un portefeuille **Wave Business** détenu par l'entité.
 ```bash
 cd server
 npm install
-npm test              # 274 tests
+npm test              # 297 tests
 npm run typecheck
 npm run scan:secrets
 npm run build && npm start
@@ -110,12 +110,24 @@ MissingSecretError : secret WAVE_API_KEY absent ou vide : aucun repli n'est prev
 | `POST /api/paiements/session` | `DRIVER`, `ADMIN` | ouvre une session de paiement, rend l'URL a presenter au chauffeur |
 | `POST /webhooks/wave` | signature HMAC | confirme un paiement, emet le bon, met le QR en file |
 | `POST /api/station/consommation` | `STATION_OPERATOR` | consomme un bon, rend le montant a servir |
+| `GET`/`POST /api/admin/factures` | `ADMIN` | liste et enregistre les factures TotalEnergies |
+| `GET`/`POST /api/admin/reglements` | `ADMIN` | liste les intentions ; en prepare une depuis une facture |
+| `POST /api/admin/reglements/:id/soumettre` | `ADMIN` | passe en attente d'approbation |
+| `POST /api/admin/reglements/:id/approuver` | `ADMIN` | **jamais le preparateur** (§9) |
+| `POST /api/admin/reglements/:id/annuler` | `ADMIN` | libere la facture pour une nouvelle intention |
+| `POST /api/admin/reglements/:id/confirmation` | `ADMIN` | envoie un code au numero **enregistre** de l'operateur |
+| `POST /api/admin/reglements/:id/executer` | `ADMIN` | emet l'ordre ; exige le code frais |
+| `POST /api/admin/reglements/:id/rapprocher` | `ADMIN` | clot le cycle, marque la facture reglee |
 | `GET /api/bons` | `DRIVER` | ses bons ; le jeton du QR n'accompagne que ceux encore utilisables |
 | `GET /api/bons/:id` | `DRIVER` (le sien), `ADMIN`, `STATION_OPERATOR` | consultation |
 
 Trois regles y sont verifiees par des tests, parce qu'elles se contournent facilement si on ne
 les ecrit pas explicitement :
 
+- **L'acteur d'un reglement vient du jeton, jamais du corps.** Sinon la separation des roles se
+  contournerait en envoyant le nom d'un collegue.
+- **Le montant d'un reglement vient de la facture, jamais du corps.** Une interface qui pourrait
+  proposer son propre montant serait une interface qui decide de ce qu'on paie.
 - **La station vient du jeton, jamais du corps de la requete.** Un pompiste ne sert pas au nom
   d'une autre station, meme s'il envoie `stationId` dans son message.
 - **Le chauffeur vient du jeton, jamais du corps.** Envoyer `driverId` dans une demande de
@@ -365,13 +377,17 @@ Deux règles sont codées, l'une exigée par le cahier des charges, l'autre ajou
 
 Dans l'ordre où cela devrait être fait :
 
-1. Envoi WhatsApp — **bloque** : identifiants WhatsApp Business et modele approuve par Meta.
-2. Worker d'envoi et reprise des envois en echec.
-3. `AuditLogger` branche sur `audit_events`.
+1. **Reprise apres crash sur un `DISPATCHING`.** L'invariant tient — la cle d'idempotence est
+   ecrite avant l'appel — mais personne ne l'exploite encore. Une intention restee
+   `DISPATCHING` apres un redemarrage doit etre confrontee au fournisseur par `lookup` avant
+   toute nouvelle tentative. C'est le manque le plus serieux du cycle aujourd'hui.
+2. Envoi WhatsApp — **bloque** : identifiants WhatsApp Business et modele approuve par Meta.
+3. Worker d'envoi et reprise des envois en echec.
 4. `Scheduler` : jobs at-least-once, verrou via `job_locks`, intention de reglement a J-n.
-5. Import du releve de consommation TE — **format a obtenir** (§14, parametre 4).
-6. PWA installable (manifest, service worker, file d'actions hors ligne, Web Push VAPID).
-7. Jeu d'enregistrements de reponses reelles en sandbox Wave.
+5. Ecran de rapprochement a trois voies, et consultation du journal d'audit.
+6. Import du releve de consommation TE — **format a obtenir** (§14, parametre 4).
+7. PWA installable (manifest, service worker, file d'actions hors ligne, Web Push VAPID).
+8. Jeu d'enregistrements de reponses reelles en sandbox Wave.
 
 ---
 

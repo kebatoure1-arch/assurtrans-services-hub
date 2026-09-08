@@ -10,7 +10,7 @@ npm run build
 ```
 
 ```bash
-npm test         # 64 tests d'interface
+npm test         # 87 tests d'interface
 ```
 
 L'adresse de l'API se regle par `ASSURTRANS_API` (defaut `http://localhost:3001`). C'est la
@@ -26,6 +26,7 @@ exportee dans le terminal l'emporte donc sur le fichier.
 | Chauffeur | `DRIVER` | ai-je un bon a presenter ? |
 | Pompiste | `STATION_OPERATOR` | est-ce que je sers, et combien ? |
 | Pilotage | `ADMIN` | ou en est l'encours TotalEnergies ? |
+| Reglement | `ADMIN` | qu'est-ce qui doit partir chez TotalEnergies, et qui l'approuve ? |
 | Referentiel | `ADMIN` | qui sont les chauffeurs, stations et operateurs ? |
 
 Le role decide de l'ecran : un chauffeur ne voit jamais celui du pompiste. Seul
@@ -65,8 +66,9 @@ dakarois.
 
 - Le service worker conserve le shell et le dernier bon utilisable du chauffeur. Il ne met pas en
   file les paiements et ne permet pas au pompiste de valider hors ligne.
-- L'administration couvre le referentiel et le pilotage de l'encours. Le cycle de reglement
-  TotalEnergies — facture, intention, double approbation, execution — n'a pas encore d'ecran, ni
-  le rapprochement, ni la consultation du journal d'audit.
+- Le rapprochement a trois voies et la consultation du journal d'audit n'ont pas d'ecran. Un
+  ecart se voit dans la liste des reglements, mais se resout encore en base.
+- L'ecran du reglement n'affiche pas l'historique des gestes d'une intention : il montre l'etat
+  courant, qui a prepare et qui a approuve. Le detail vit dans `audit_events`.
 - Les codes OTP passent par Africa's Talking côté serveur. Les secrets ne doivent jamais entrer
   dans le bundle frontend.
