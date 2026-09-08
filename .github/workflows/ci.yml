@@ -34,6 +34,65 @@ jobs:
       - name: Tests
         run: npm test
 
+  integration:
+    name: Contraintes de la base
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+
+    # Les depots sont testes ailleurs contre une doublure qui verifie la FORME du SQL. Une
+    # doublure accepte une colonne qui n'existe pas : c'est arrive, et le tableau de bord
+    # repondait 500 au premier appel reel. Cette tache execute le SQL contre un vrai PostgreSQL,
+    # seule verification qui prouve quelque chose pour du SQL, et prouve du meme coup les
+    # contraintes des migrations — ON CONFLICT, index uniques, CHECK, journal en ajout seul.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: assurtrans
+          POSTGRES_PASSWORD: integration-ci-uniquement
+          POSTGRES_DB: assurtrans_test
+          # Le projet est francophone jusque dans ses migrations : une base non UTF-8 echoue
+          # des le premier caractere hors Latin-1.
+          POSTGRES_INITDB_ARGS: '--encoding=UTF8 --lc-collate=C --lc-ctype=C'
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U assurtrans -d assurtrans_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL_TEST: postgres://assurtrans:integration-ci-uniquement@localhost:5432/assurtrans_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Migrations
+        run: npm run migrate -- "$DATABASE_URL_TEST"
+
+      # Sans `DATABASE_URL_TEST`, la suite est ignoree plutot qu'en echec — pour qu'un poste
+      # sans base ne voie pas rouge. En CI la base existe : une suite ignoree signifierait que
+      # la variable n'atteint pas le conteneur, et le vert ne prouverait rien. On verifie donc
+      # l'absence de `skipped` en plus du code de sortie, sur la meme execution.
+      - name: Tests d'intégration
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee "$RUNNER_TEMP/integration.txt"
+          if grep -q 'skipped' "$RUNNER_TEMP/integration.txt"; then
+            echo "::error::suite ignoree : DATABASE_URL_TEST n'atteint pas la base, le vert ne prouve rien"
+            exit 1
+          fi
+
   frontend:
     name: Frontend autonome
     runs-on: ubuntu-latest

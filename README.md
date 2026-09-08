@@ -60,11 +60,19 @@ jeu de démonstration — est dans [server/README.md](server/README.md).
 
 ## CI
 
-Deux tâches. Serveur : scan de secrets, typecheck, tests. Frontend : tests d'interface, build.
+Trois tâches, en parallèle :
+
+| Tâche | Contenu |
+|---|---|
+| Module de règlement | scan de secrets, typecheck, 274 tests |
+| Contraintes de la base | PostgreSQL 16 en service, migrations, 40 tests d'intégration |
+| Frontend autonome | typecheck, 64 tests d'interface, build |
+
 Le scan de secrets passe en premier — un secret exposé rend le reste sans objet.
 
-Les tests d'intégration PostgreSQL ne tournent pas en CI : ils exigent une base, et sans
-`DATABASE_URL_TEST` la suite est ignorée plutôt qu'en échec. Ils se lancent en local, et c'est
-une limite assumée à lever quand la CI disposera d'un service PostgreSQL.
+La tâche d'intégration vérifie aussi que la suite **a réellement tourné**. Sans
+`DATABASE_URL_TEST`, les tests sont ignorés plutôt qu'en échec — pour qu'un poste sans base ne
+voie pas rouge. En CI, une suite ignorée passerait pour verte sans rien prouver : la tâche
+échoue si elle voit `skipped`.
 
 Voir [server/README.md](server/README.md) pour le runbook opérationnel.

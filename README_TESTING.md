@@ -67,5 +67,10 @@ npm run typecheck
 npm run scan:secrets
 ```
 
-C'est ce que la CI exécute, moins les tests d'intégration : ils exigent une base, et la CI n'en
-provisionne pas encore. C'est la limite connue la plus importante de la chaîne.
+La CI exécute les trois suites. Elle provisionne un PostgreSQL 16 en service pour la troisième,
+applique les migrations, puis vérifie que la suite n'a pas été **ignorée** : sans
+`DATABASE_URL_TEST` elle le serait silencieusement, et le vert ne prouverait rien.
+
+Ce qu'elle ne fait toujours pas : mesurer la couverture, et jouer les scénarios de concurrence
+sur plusieurs processus. Les écritures conditionnelles sont vérifiées séquentiellement, ce qui
+prouve la contrainte en base mais pas la course elle-même.
