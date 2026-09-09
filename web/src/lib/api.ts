@@ -268,6 +268,16 @@ export const api = {
       { methode: 'POST', jeton },
     ),
 
+  /**
+   * Relance l'examen des envois interrompus. Ne reemet jamais : interroge le fournisseur et
+   * enregistre ce qu'il repond.
+   */
+  reprendreEnvois: (jeton: string) =>
+    appeler<{ examinees: number; retrouvees: number; enRevue: number; ignoree?: string }>(
+      '/api/admin/reprise',
+      { methode: 'POST', jeton },
+    ),
+
   executerReglement: (jeton: string, id: string, code: string) =>
     appeler<Reglement>(`/api/admin/reglements/${id}/executer`, {
       methode: 'POST',

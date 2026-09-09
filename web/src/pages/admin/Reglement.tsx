@@ -107,6 +107,8 @@ export function Reglement() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [ouvrirAjout, setOuvrirAjout] = useState(false);
+  /** Bilan du dernier examen des envois interrompus. */
+  const [bilanReprise, setBilanReprise] = useState<string | null>(null);
 
   /** Intention dont on est en train de confirmer l'exécution, et le code saisi. */
   const [aExecuter, setAExecuter] = useState<Intention | null>(null);
@@ -189,6 +191,26 @@ export function Reglement() {
     });
   }
 
+  /**
+   * Relance l'examen des envois interrompus.
+   *
+   * Le bouton ne s'affiche que s'il y a quelque chose à examiner : une intention « Envoi en
+   * cours » qui ne bouge plus. Le proposer en permanence inviterait à cliquer sans raison sur
+   * une action qui interroge le fournisseur.
+   */
+  async function reprendre() {
+    setBilanReprise(null);
+    await geste(async () => {
+      const r = await api.reprendreEnvois(jeton);
+      setBilanReprise(
+        r.examinees === 0
+          ? 'Aucun envoi en suspens.'
+          : `${r.examinees} envoi(s) examiné(s) : ${r.retrouvees} retrouvé(s) chez le ` +
+            `fournisseur, ${r.enRevue} confié(s) à un examen humain.`,
+      );
+    });
+  }
+
   async function demanderCode(intention: Intention) {
     setAExecuter(intention);
     setCode('');
@@ -221,6 +243,9 @@ export function Reglement() {
   const vivante = (i: Intention | undefined) =>
     i !== undefined && !['FAILED', 'CANCELLED'].includes(i.statut);
   const enRevue = intentions.filter((i) => i.statut === 'NEEDS_REVIEW' || i.statut === 'VARIANCE');
+  // Un ordre parti dont le fournisseur n'a rien confirme. C'est le seul etat ou de l'argent peut
+  // etre en suspens sans que personne ne le sache.
+  const enSuspens = intentions.filter((i) => i.statut === 'DISPATCHING');
   const formulaireValide =
     numero.trim() !== '' &&
     montantXof !== '' &&
@@ -232,6 +257,21 @@ export function Reglement() {
   return (
     <section className="reglement">
       {erreur !== null && <p className="message erreur">{erreur}</p>}
+
+      {bilanReprise !== null && <p className="message info">{bilanReprise}</p>}
+
+      {enSuspens.length > 0 && (
+        <div className="bloc incidents">
+          <h2 className="titre-bloc">Envois sans réponse</h2>
+          <p className="chapo">
+            {enSuspens.length} ordre(s) partis sans que le fournisseur ait confirmé. L’examen
+            interroge le fournisseur sur leur sort — il ne renvoie jamais l’argent.
+          </p>
+          <button type="button" className="bouton-compact" disabled={enCours} onClick={() => void reprendre()}>
+            Examiner ces envois
+          </button>
+        </div>
+      )}
 
       {enRevue.length > 0 && (
         <div className="bloc incidents">

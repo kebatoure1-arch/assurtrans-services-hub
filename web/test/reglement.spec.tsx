@@ -310,6 +310,55 @@ describe('exécution', () => {
   });
 });
 
+describe('envois sans réponse', () => {
+  it('ne propose l’examen que s’il y a quelque chose à examiner', async () => {
+    // Le proposer en permanence inviterait a cliquer sans raison sur une action qui interroge
+    // le fournisseur.
+    await ouvrirReglement({ factures: [facture()], reglements: [intention({ statut: 'SENT' })] });
+
+    await screen.findByText('ASSURTRANS/TE-2026-08');
+    expect(screen.queryByRole('button', { name: /examiner ces envois/i })).toBeNull();
+  });
+
+  it('propose l’examen quand un ordre est parti sans réponse', async () => {
+    await ouvrirReglement({
+      factures: [facture()],
+      reglements: [intention({ statut: 'DISPATCHING' })],
+    });
+
+    expect(await screen.findByRole('button', { name: /examiner ces envois/i })).toBeVisible();
+    expect(screen.getByText(/il ne renvoie jamais l’argent/i)).toBeVisible();
+  });
+
+  it('rend compte de ce que l’examen a trouvé', async () => {
+    await ouvrirReglement({
+      factures: [facture()],
+      reglements: [intention({ statut: 'DISPATCHING' })],
+    });
+    serveur.repond('POST /api/admin/reprise', {
+      corps: { examinees: 1, retrouvees: 0, enRevue: 1 },
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: /examiner ces envois/i }));
+
+    expect(await screen.findByText(/1 confié\(s\) à un examen humain/i)).toBeVisible();
+  });
+
+  it('le dit quand il n’y avait rien à examiner', async () => {
+    await ouvrirReglement({
+      factures: [facture()],
+      reglements: [intention({ statut: 'DISPATCHING' })],
+    });
+    serveur.repond('POST /api/admin/reprise', {
+      corps: { examinees: 0, retrouvees: 0, enRevue: 0 },
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: /examiner ces envois/i }));
+
+    expect(await screen.findByText(/aucun envoi en suspens/i)).toBeVisible();
+  });
+});
+
 describe('ce qui a mal tourné', () => {
   it('remonte en tête une intention en revue, en disant que des fonds sont peut-être partis', async () => {
     await ouvrirReglement({
