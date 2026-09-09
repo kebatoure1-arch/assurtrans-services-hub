@@ -64,4 +64,14 @@ export interface PaymentIntentRepository {
    * pas à inventer un identifiant qui n'existe pas.
    */
   cumulDuJour(contractId: string, jourIso: string, saufIntentId: string | null): Promise<XOF>;
+
+  /**
+   * Intentions restées en `DISPATCHING` depuis assez longtemps pour qu'aucun appel ne soit
+   * plausiblement encore en cours.
+   *
+   * `avant` est un instant, pas une durée : c'est l'appelant qui décide du délai, et le dépôt
+   * n'a pas à connaître l'horloge. Sans cette borne, la reprise volerait l'intention d'un appel
+   * sortant encore en vol dans un autre processus.
+   */
+  listerInterrompues(avant: string, limite: number): Promise<readonly PaymentIntent[]>;
 }

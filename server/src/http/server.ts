@@ -50,6 +50,7 @@ import {
 } from '../application/admin/manage-directory.ts';
 import type { TableauDeBord } from '../application/admin/tableau-de-bord.ts';
 import type { AuditLogger } from '../ports/audit.ts';
+import type { ReprendreEnvoisInterrompus } from '../application/settlement/reprise.ts';
 import {
   ConcurrenceError,
   CycleReglement,
@@ -104,6 +105,11 @@ export interface ServerDeps {
   readonly reglement?: CycleReglement;
   /** Contrat servi par ce deploiement. Les listes de factures et d'intentions s'y rapportent. */
   readonly contractId?: string;
+  /**
+   * Reprise des envois interrompus. Elle tourne au demarrage ; la route permet de la relancer
+   * sans redemarrer, ce qui compte le jour ou une intention reste bloquee.
+   */
+  readonly reprise?: ReprendreEnvoisInterrompus;
 }
 
 declare module 'fastify' {
@@ -680,6 +686,21 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       );
     },
   );
+
+  /**
+   * Relance la reprise des envois interrompus.
+   *
+   * Elle ne reemet jamais : elle interroge le fournisseur sur le sort des ordres restes en
+   * suspens et enregistre ce qu'il repond. Elle est exposee parce qu'un administrateur qui voit
+   * une intention bloquee doit pouvoir la faire examiner sans attendre un redemarrage.
+   */
+  app.post('/api/admin/reprise', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    if (deps.reprise === undefined) return erreur(reply, 503, 'reprise indisponible');
+
+    return reply.send(await deps.reprise.executer());
+  });
 
   app.post('/api/paiements/session', async (req, reply) => {
     const principal = await exigerRole(req, reply, ['DRIVER', 'ADMIN']);

@@ -113,6 +113,10 @@ class FauxIntentions implements PaymentIntentRepository {
     void contractId;
     return [...this.lignes.values()].slice(0, limite);
   }
+  async listerInterrompues(avant: string, limite: number) {
+    void avant;
+    return [...this.lignes.values()].filter((i) => i.statut === 'DISPATCHING').slice(0, limite);
+  }
   async cumulDuJour(contractId: string, jourIso: string, saufIntentId: string | null) {
     void contractId;
     void jourIso;

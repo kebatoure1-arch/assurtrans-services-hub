@@ -9,7 +9,7 @@ depuis un portefeuille **Wave Business** détenu par l'entité.
 ```bash
 cd server
 npm install
-npm test              # 297 tests
+npm test              # 310 tests
 npm run typecheck
 npm run scan:secrets
 npm run build && npm start
@@ -118,6 +118,7 @@ MissingSecretError : secret WAVE_API_KEY absent ou vide : aucun repli n'est prev
 | `POST /api/admin/reglements/:id/confirmation` | `ADMIN` | envoie un code au numero **enregistre** de l'operateur |
 | `POST /api/admin/reglements/:id/executer` | `ADMIN` | emet l'ordre ; exige le code frais |
 | `POST /api/admin/reglements/:id/rapprocher` | `ADMIN` | clot le cycle, marque la facture reglee |
+| `POST /api/admin/reprise` | `ADMIN` | relance la reprise des envois interrompus ; ne reemet jamais |
 | `GET /api/bons` | `DRIVER` | ses bons ; le jeton du QR n'accompagne que ceux encore utilisables |
 | `GET /api/bons/:id` | `DRIVER` (le sien), `ADMIN`, `STATION_OPERATOR` | consultation |
 
@@ -273,7 +274,9 @@ server/
 │   │   ├── authenticate-by-phone.ts      Demande de code, ouverture de session
 │   │   └── admin/
 │   │       ├── manage-directory.ts       Référentiel : unicité du numéro, changements de statut
-│   │       └── tableau-de-bord.ts        Encours, projection, activité, incidents
+│   │       ├── tableau-de-bord.ts        Encours, projection, activité, incidents
+│   │       ├── cycle-reglement.ts        Facture → intention → double approbation → envoi
+│   │       └── reprise.ts                Envois interrompus : on interroge, on ne réémet jamais
 │   ├── ports/
 │   │   ├── settlement-channel.ts         Sortie de fonds — règlement TotalEnergies
 │   │   ├── collection-channel.ts         Entrée de fonds — paiement des chauffeurs
@@ -377,10 +380,10 @@ Deux règles sont codées, l'une exigée par le cahier des charges, l'autre ajou
 
 Dans l'ordre où cela devrait être fait :
 
-1. **Reprise apres crash sur un `DISPATCHING`.** L'invariant tient — la cle d'idempotence est
-   ecrite avant l'appel — mais personne ne l'exploite encore. Une intention restee
-   `DISPATCHING` apres un redemarrage doit etre confrontee au fournisseur par `lookup` avant
-   toute nouvelle tentative. C'est le manque le plus serieux du cycle aujourd'hui.
+1. **Documentation de la recherche par cle d'idempotence chez Wave** (§14). Sans elle, la
+   reprise ne peut jamais conclure sur un canal reel : elle met systematiquement en revue, ce
+   qui est correct mais reporte tout sur un humain. C'est le parametre qui rendrait la reprise
+   reellement automatique.
 2. Envoi WhatsApp — **bloque** : identifiants WhatsApp Business et modele approuve par Meta.
 3. Worker d'envoi et reprise des envois en echec.
 4. `Scheduler` : jobs at-least-once, verrou via `job_locks`, intention de reglement a J-n.

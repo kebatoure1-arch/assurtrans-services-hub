@@ -37,8 +37,11 @@ import {
 } from './infra/db/pg-admin.ts';
 import { ManageDirectory } from './application/admin/manage-directory.ts';
 import { TableauDeBord } from './application/admin/tableau-de-bord.ts';
+import { hostname } from 'node:os';
 import { PgAuditLogger } from './infra/audit/audit-logger.ts';
 import { CycleReglement } from './application/settlement/cycle-reglement.ts';
+import { ReprendreEnvoisInterrompus } from './application/settlement/reprise.ts';
+import { PgVerrouTravaux } from './infra/db/pg-verrou.ts';
 import {
   PgInvoiceRepository,
   PgPaymentIntentRepository,
@@ -106,6 +109,25 @@ async function main(): Promise<void> {
     transport,
   );
 
+  /**
+   * Reprise des envois interrompus.
+   *
+   * Le delai avant reprise doit depasser le temps d'un appel sortant : en dessous, on volerait
+   * l'intention d'un envoi encore en vol. La duree du verrou doit depasser celle d'un passage,
+   * sinon deux exemplaires s'y retrouveraient ensemble.
+   */
+  const reprise =
+    contrat === null
+      ? undefined
+      : new ReprendreEnvoisInterrompus({
+          intentions: new PgPaymentIntentRepository(db),
+          canal: canalReglement,
+          verrou: new PgVerrouTravaux(db, `${process.pid}@${hostname()}`, 300),
+          horloge: () => new Date().toISOString(),
+          delaiAvantRepriseSecondes: 120,
+          audit: new PgAuditLogger(db),
+        });
+
   const app = buildServer({
     encaissement: resolveCollectionChannel(
       { canal: config.canalEncaissement },
@@ -167,6 +189,7 @@ async function main(): Promise<void> {
       fenetreJours: config.fenetreConsommationJours,
     }),
     contractId: contrat?.id,
+    reprise,
     reglement:
       contrat === null
         ? undefined
@@ -189,6 +212,14 @@ async function main(): Promise<void> {
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
 
+  // Un premier passage au demarrage : c'est precisement apres un arret brutal que des
+  // intentions restent en DISPATCHING, et c'est donc au redemarrage qu'il faut aller demander
+  // au fournisseur ce qu'elles sont devenues. Le resultat est journalise ; un echec du passage
+  // n'empeche pas le serveur de servir.
+  const bilanReprise = await reprise?.executer().catch((cause) => ({
+    erreur: cause instanceof Error ? cause.message : String(cause),
+  }));
+
   // Journal de démarrage : ce qui est actif, sans aucune valeur sensible.
   console.log(
     JSON.stringify({
@@ -201,6 +232,7 @@ async function main(): Promise<void> {
       echoCodeActif: config.otp.echoCode,
       originesAutorisees: config.originesAutorisees,
       lectureEvenementsArmee: config.checkout.eventType !== '',
+      reprise: bilanReprise ?? 'inactive',
     }),
   );
 

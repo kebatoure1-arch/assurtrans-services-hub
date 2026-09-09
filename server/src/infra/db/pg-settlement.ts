@@ -262,6 +262,27 @@ export class PgPaymentIntentRepository implements PaymentIntentRepository {
    * peser sur le plafond. L'oublier permettrait de dépasser le plafond en enchaînant les
    * ambiguïtés.
    */
+  /**
+   * Intentions abandonnees en plein envoi.
+   *
+   * `ts_dispatching < $1` est la borne d'age : une intention passee en DISPATCHING il y a dix
+   * secondes appartient peut-etre encore a un appel en vol. On prend les plus anciennes
+   * d'abord — ce sont celles dont l'incertitude dure depuis le plus longtemps.
+   */
+  async listerInterrompues(avant: string, limite: number): Promise<readonly PaymentIntent[]> {
+    const r = await this.db.query(
+      `SELECT ${COLONNES_INTENTION}
+         FROM payment_intents
+        WHERE statut = 'DISPATCHING'
+          AND ts_dispatching IS NOT NULL
+          AND ts_dispatching < $1
+        ORDER BY ts_dispatching ASC
+        LIMIT $2`,
+      [avant, limite],
+    );
+    return r.rows.map(intentionDepuisLigne);
+  }
+
   async cumulDuJour(
     contractId: string,
     jourIso: string,

@@ -19,6 +19,7 @@ import {
   PgInvoiceRepository,
   PgPaymentIntentRepository,
 } from '../../src/infra/db/pg-settlement.ts';
+import { PgVerrouTravaux } from '../../src/infra/db/pg-verrou.ts';
 import type { Invoice } from '../../src/ports/settlement.ts';
 
 const URL_TEST = process.env.DATABASE_URL_TEST;
@@ -87,7 +88,7 @@ decrire('intégration PostgreSQL — cycle de règlement', () => {
       TRUNCATE voucher_deliveries, fuel_vouchers, checkout_sessions, driver_payments,
                card_transactions, api_tokens, cards, drivers, stations, operateurs,
                reconciliations, webhook_events, payment_intents, invoices,
-               te_contracts, wave_transactions, entities, audit_events
+               te_contracts, wave_transactions, entities, audit_events, job_locks
       RESTART IDENTITY CASCADE
     `);
 
@@ -309,6 +310,14 @@ decrire('intégration PostgreSQL — cycle de règlement', () => {
   });
 
   describe('cumul du jour', () => {
+    /**
+     * Le jour civil courant, calculé et non écrit en dur.
+     *
+     * Les lignes sont posées avec `now()` : un jour figé dans le test le fait passer aujourd'hui
+     * et échouer demain. Un test qui casse au changement de date n'apprend rien sur le code.
+     */
+    const aujourdHui = () => new Date().toISOString().slice(0, 10);
+
     async function intentionEnvoyee(numero: string, montant: number, statut: string) {
       const f = facture({ numero, montant: xof(montant) });
       await factures.saveIfNew(f);
@@ -327,7 +336,7 @@ decrire('intégration PostgreSQL — cycle de règlement', () => {
       await intentionEnvoyee('TE-A', 1_000_000, 'SENT');
       await intentionEnvoyee('TE-B', 500_000, 'SETTLED');
 
-      const total = await intentions.cumulDuJour(contractId, '2026-09-08', null);
+      const total = await intentions.cumulDuJour(contractId, aujourdHui(), null);
 
       expect(total).toBe(1_500_000);
     });
@@ -336,20 +345,20 @@ decrire('intégration PostgreSQL — cycle de règlement', () => {
       // Les ignorer permettrait de dépasser le plafond en enchaînant les ambiguïtés.
       await intentionEnvoyee('TE-A', 1_000_000, 'NEEDS_REVIEW');
 
-      expect(await intentions.cumulDuJour(contractId, '2026-09-08', null)).toBe(1_000_000);
+      expect(await intentions.cumulDuJour(contractId, aujourdHui(), null)).toBe(1_000_000);
     });
 
     it('ignore ce qui n’est jamais parti', async () => {
       await intentionEnvoyee('TE-A', 1_000_000, 'CANCELLED');
       await intentionEnvoyee('TE-B', 700_000, 'FAILED');
 
-      expect(await intentions.cumulDuJour(contractId, '2026-09-08', null)).toBe(0);
+      expect(await intentions.cumulDuJour(contractId, aujourdHui(), null)).toBe(0);
     });
 
     it('exclut l’intention courante, pour ne pas la compter deux fois', async () => {
       const id = await intentionEnvoyee('TE-A', 1_000_000, 'SENT');
 
-      expect(await intentions.cumulDuJour(contractId, '2026-09-08', id)).toBe(0);
+      expect(await intentions.cumulDuJour(contractId, aujourdHui(), id)).toBe(0);
     });
 
     it('ne compte pas la veille', async () => {
@@ -359,7 +368,7 @@ decrire('intégration PostgreSQL — cycle de règlement', () => {
         [id],
       );
 
-      expect(await intentions.cumulDuJour(contractId, '2026-09-08', null)).toBe(0);
+      expect(await intentions.cumulDuJour(contractId, aujourdHui(), null)).toBe(0);
     });
 
     it('ne compte pas le contrat du voisin', async () => {
@@ -372,7 +381,120 @@ decrire('intégration PostgreSQL — cycle de règlement', () => {
         [autre, entityId],
       );
 
-      expect(await intentions.cumulDuJour(autre, '2026-09-08', null)).toBe(0);
+      expect(await intentions.cumulDuJour(autre, aujourdHui(), null)).toBe(0);
+    });
+  });
+
+  describe('reprise des envois interrompus', () => {
+    /** Une intention laissee en DISPATCHING, avec l'age qu'on veut. */
+    async function abandonnee(numero: string, ilYASecondes: number) {
+      const f = facture({ numero });
+      await factures.saveIfNew(f);
+      const i = brouillon(f.id);
+      await intentions.saveIfNew(i);
+      await pool.query(
+        `UPDATE payment_intents
+            SET statut = 'DISPATCHING', idempotency_key = $2, execute_par = 'fatou',
+                ts_dispatching = now() - make_interval(secs => $3)
+          WHERE id = $1`,
+        [i.id, uuid(), ilYASecondes],
+      );
+      return i.id;
+    }
+
+    it('remonte une intention abandonnee assez ancienne', async () => {
+      const id = await abandonnee('TE-A', 600);
+
+      const avant = new Date(Date.now() - 120_000).toISOString();
+      const trouvees = await intentions.listerInterrompues(avant, 10);
+
+      expect(trouvees.map((i) => i.id)).toEqual([id]);
+      expect(trouvees[0].statut).toBe('DISPATCHING');
+      expect(trouvees[0].idempotencyKey).not.toBeNull();
+    });
+
+    it('laisse tranquille un envoi peut-etre encore en vol', async () => {
+      // Sans cette borne, la reprise volerait l'intention d'un appel sortant en cours et le
+      // ferait echouer sur une ecriture conditionnelle refusee.
+      await abandonnee('TE-A', 5);
+
+      const avant = new Date(Date.now() - 120_000).toISOString();
+
+      expect(await intentions.listerInterrompues(avant, 10)).toEqual([]);
+    });
+
+    it('ne remonte que DISPATCHING', async () => {
+      const id = await abandonnee('TE-A', 600);
+      await pool.query(`UPDATE payment_intents SET statut = 'SENT' WHERE id = $1`, [id]);
+
+      const avant = new Date(Date.now() - 120_000).toISOString();
+
+      expect(await intentions.listerInterrompues(avant, 10)).toEqual([]);
+    });
+
+    it('rend les plus anciennes d’abord : leur incertitude dure depuis plus longtemps', async () => {
+      const vieille = await abandonnee('TE-A', 3600);
+      const recente = await abandonnee('TE-B', 300);
+
+      const avant = new Date(Date.now() - 120_000).toISOString();
+      const trouvees = await intentions.listerInterrompues(avant, 10);
+
+      expect(trouvees.map((i) => i.id)).toEqual([vieille, recente]);
+    });
+  });
+
+  describe('verrou de travaux', () => {
+    it('un seul exemplaire l’obtient', async () => {
+      // Deux serveurs qui reprennent les memes ordres au meme instant, ce sont deux
+      // consultations et deux ecritures concurrentes sur la meme intention.
+      const premier = new PgVerrouTravaux(db, 'exemplaire-1', 300);
+      const second = new PgVerrouTravaux(db, 'exemplaire-2', 300);
+
+      expect(await premier.prendre('reprise-envois')).toBe(true);
+      expect(await second.prendre('reprise-envois')).toBe(false);
+    });
+
+    it('le rendre laisse la place au suivant', async () => {
+      const premier = new PgVerrouTravaux(db, 'exemplaire-1', 300);
+      const second = new PgVerrouTravaux(db, 'exemplaire-2', 300);
+      await premier.prendre('reprise-envois');
+
+      await premier.rendre('reprise-envois');
+
+      expect(await second.prendre('reprise-envois')).toBe(true);
+    });
+
+    it('un verrou expire se reprend tout seul', async () => {
+      // Un exemplaire tue en le tenant ne le rend jamais. Sans echeance, la reprise cesserait
+      // definitivement — pire que de la faire deux fois.
+      const mort = new PgVerrouTravaux(db, 'exemplaire-mort', 1);
+      await mort.prendre('reprise-envois');
+      await pool.query(
+        `UPDATE job_locks SET expires_at = now() - interval '1 minute'
+          WHERE job_name = 'reprise-envois'`,
+      );
+
+      const vivant = new PgVerrouTravaux(db, 'exemplaire-2', 300);
+
+      expect(await vivant.prendre('reprise-envois')).toBe(true);
+    });
+
+    it('ne libere pas le verrou d’un autre', async () => {
+      // Un exemplaire dont le verrou a expire, repris entre-temps, ne doit pas liberer celui de
+      // son successeur en terminant son propre passage.
+      const ancien = new PgVerrouTravaux(db, 'exemplaire-1', 1);
+      await ancien.prendre('reprise-envois');
+      await pool.query(
+        `UPDATE job_locks SET expires_at = now() - interval '1 minute'
+          WHERE job_name = 'reprise-envois'`,
+      );
+      const nouveau = new PgVerrouTravaux(db, 'exemplaire-2', 300);
+      await nouveau.prendre('reprise-envois');
+
+      await ancien.rendre('reprise-envois');
+
+      const tiers = new PgVerrouTravaux(db, 'exemplaire-3', 300);
+      expect(await tiers.prendre('reprise-envois')).toBe(false);
     });
   });
 
