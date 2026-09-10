@@ -64,14 +64,58 @@ export class MsisdnInvalideError extends Error {
   }
 }
 
-/** Indicatif par défaut. Le service s'adresse à des chauffeurs au Sénégal. */
-const INDICATIF_DEFAUT = '221';
+/**
+ * Plans de numérotation desservis.
+ *
+ * Deux pays, deux plans, et ils ne se recouvrent pas : un numéro national sénégalais fait neuf
+ * chiffres et commence par 7, un ivoirien en fait dix et commence par 0. Cette absence de
+ * recouvrement est ce qui permet d'accepter une saisie locale sans demander l'indicatif à un
+ * chauffeur qui lit sa carte SIM.
+ *
+ * **Seuls les mobiles sont acceptés.** Le système ne parle au chauffeur que par SMS : accepter
+ * un fixe reviendrait à lui promettre un code qui n'arriverait jamais, et à lui laisser croire
+ * que le service est en panne. Les préfixes fixes connus — 33 au Sénégal, 21/25/27 en Côte
+ * d'Ivoire — sont donc refusés à la saisie.
+ *
+ * ⚠ Cette liste se périme. Un régulateur qui ouvre une nouvelle tranche mobile rend des
+ * numéros parfaitement valides inutilisables ici. C'est le prix du refus des fixes, et il se
+ * paie en la tenant à jour : ARTP pour le Sénégal, ARTCI pour la Côte d'Ivoire.
+ */
+const PLANS = [
+  {
+    /** Sénégal. Mobiles : 70 Expresso/Orange, 75 et 76 Free, 77 et 78 Orange. Fixe : 33. */
+    indicatif: '221',
+    longueurNationale: 9,
+    prefixesMobiles: ['70', '75', '76', '77', '78'],
+  },
+  {
+    /**
+     * Côte d'Ivoire. Le plan est passé de huit à dix chiffres le 31 janvier 2021 : un ancien
+     * numéro à huit chiffres ne joint plus personne, et le refuser vaut mieux que composer un
+     * numéro mort. Mobiles : 01 Moov, 05 MTN, 07 Orange. Fixes : 21, 25, 27.
+     */
+    indicatif: '225',
+    longueurNationale: 10,
+    prefixesMobiles: ['01', '05', '07'],
+  },
+] as const;
+
+function estMobileDuPlan(plan: (typeof PLANS)[number], national: string): boolean {
+  return (
+    national.length === plan.longueurNationale &&
+    plan.prefixesMobiles.some((p) => national.startsWith(p))
+  );
+}
 
 /**
  * Ramène une saisie humaine en E.164.
  *
  * Un chauffeur tape « 77 000 00 01 ». Lui demander un préfixe international serait lui faire
  * porter une contrainte de format qui nous appartient.
+ *
+ * Deux garanties, et ce sont les seules qui comptent : deux façons d'écrire le même numéro
+ * donnent la même chaîne — sinon un chauffeur se retrouve avec deux comptes — et deux numéros
+ * différents n'en donnent jamais une identique — sinon l'un reçoit les bons de l'autre.
  */
 export function normaliserMsisdn(saisie: string): string {
   if (typeof saisie !== 'string') throw new MsisdnInvalideError(String(saisie));
@@ -79,10 +123,23 @@ export function normaliserMsisdn(saisie: string): string {
   let chiffres = saisie.replace(/[\s.\-()]/g, '');
   if (chiffres.startsWith('+')) chiffres = chiffres.slice(1);
   else if (chiffres.startsWith('00')) chiffres = chiffres.slice(2);
-  else if (!chiffres.startsWith(INDICATIF_DEFAUT)) chiffres = INDICATIF_DEFAUT + chiffres;
 
-  if (!/^[1-9][0-9]{7,14}$/.test(chiffres)) throw new MsisdnInvalideError(saisie);
-  return `+${chiffres}`;
+  if (!/^[0-9]+$/.test(chiffres)) throw new MsisdnInvalideError(saisie);
+
+  // Forme internationale : l'indicatif désigne le plan, sans ambiguïté possible.
+  for (const plan of PLANS) {
+    if (!chiffres.startsWith(plan.indicatif)) continue;
+    const national = chiffres.slice(plan.indicatif.length);
+    if (estMobileDuPlan(plan, national)) return `+${plan.indicatif}${national}`;
+  }
+
+  // Forme locale : c'est la forme du numéro qui désigne le plan. Les deux ne se recouvrant
+  // pas, au plus un plan peut reconnaître une saisie donnée.
+  for (const plan of PLANS) {
+    if (estMobileDuPlan(plan, chiffres)) return `+${plan.indicatif}${chiffres}`;
+  }
+
+  throw new MsisdnInvalideError(saisie);
 }
 
 /**

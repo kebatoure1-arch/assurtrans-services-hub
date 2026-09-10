@@ -316,7 +316,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       return reply.code(202).send(r);
     } catch (cause) {
       if (cause instanceof MsisdnInvalideError) {
-        return erreur(reply, 400, 'numero de telephone invalide');
+        return erreur(reply, 400, 'numero de telephone invalide : attendu un mobile senegalais (9 chiffres, 70/75/76/77/78) ou ivoirien (10 chiffres, 01/05/07)');
       }
       if (cause instanceof TropDeDemandesError) {
         return reply
@@ -341,7 +341,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       return reply.code(200).send(session);
     } catch (cause) {
       if (cause instanceof MsisdnInvalideError) {
-        return erreur(reply, 400, 'numero de telephone invalide');
+        return erreur(reply, 400, 'numero de telephone invalide : attendu un mobile senegalais (9 chiffres, 70/75/76/77/78) ou ivoirien (10 chiffres, 01/05/07)');
       }
       if (cause instanceof AuthentificationRefuseeError) {
         return erreur(reply, 401, cause.message);
@@ -369,7 +369,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (cause instanceof NumeroDejaUtiliseError) return erreur(reply, 409, cause.message);
     if (cause instanceof ReferentielRefuseError) return erreur(reply, 400, cause.message);
     if (cause instanceof Error && cause.message.includes('inexploitable')) {
-      return erreur(reply, 400, 'numero de telephone invalide');
+      return erreur(reply, 400, 'numero de telephone invalide : attendu un mobile senegalais (9 chiffres, 70/75/76/77/78) ou ivoirien (10 chiffres, 01/05/07)');
     }
     if (cause instanceof Error && cause.message.includes('duplicate key')) {
       return erreur(reply, 409, 'fiche deja existante');

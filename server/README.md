@@ -9,7 +9,7 @@ depuis un portefeuille **Wave Business** détenu par l'entité.
 ```bash
 cd server
 npm install
-npm test              # 340 tests
+npm test              # 358 tests
 npm run typecheck
 npm run scan:secrets
 npm run build && npm start
@@ -91,6 +91,28 @@ Sans configuration, le serveur refuse de demarrer et nomme la variable manquante
 ConfigurationError : variable d'environnement SETTLEMENT_CHANNEL absente ou vide
 MissingSecretError : secret WAVE_API_KEY absent ou vide : aucun repli n'est prevu
 ```
+
+## Numeros de telephone
+
+Le service dessert deux plans de numerotation, et **seuls les mobiles sont acceptes** : le
+systeme ne parle au chauffeur que par SMS, et accepter un fixe reviendrait a lui promettre un
+code qui n'arriverait jamais.
+
+| Pays | Indicatif | Longueur nationale | Prefixes mobiles | Fixes refuses |
+|---|---|---|---|---|
+| Senegal | +221 | 9 chiffres | 70, 75, 76, 77, 78 | 33 |
+| Cote d'Ivoire | +225 | 10 chiffres | 01, 05, 07 | 21, 25, 27 |
+
+Les deux plans ne se recouvrent pas — neuf chiffres commencant par 7 d'un cote, dix commencant
+par 0 de l'autre — ce qui permet d'accepter une saisie locale sans demander l'indicatif a
+quelqu'un qui lit sa carte SIM. `+221 77 000 00 01`, `00221770000001` et `77 000 00 01`
+designent la meme personne.
+
+⚠ La liste des prefixes se perime. Un regulateur qui ouvre une nouvelle tranche rend des
+numeros parfaitement valides inutilisables ici. C'est le prix du refus des fixes, et il se paie
+en tenant la liste a jour : ARTP au Senegal, ARTCI en Cote d'Ivoire. Elle vit a deux endroits —
+`src/domain/otp.ts` et `scripts/msisdn.mjs`, les scripts d'amorcage tournant avant toute
+compilation — et `test/msisdn.spec.ts` prouve que les deux restent d'accord.
 
 ## API
 
@@ -319,6 +341,7 @@ server/
 ├── scripts/
 │   ├── base-locale.mjs                   PostgreSQL portable, sans Docker ni droits admin
 │   ├── migrate.mjs                       Une migration par transaction
+│   ├── msisdn.mjs                        Normalisation partagee avec le domaine, prouvee
 │   ├── amorcer.mjs                       Premier administrateur — refuse s'il en existe un
 │   ├── jeu-demo.mjs                      Données de démonstration, bases locales uniquement
 │   └── scan-secrets.mjs                  Scan CI (§11, item 1) + référence figée

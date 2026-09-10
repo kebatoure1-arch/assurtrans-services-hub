@@ -16,6 +16,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import pg from 'pg';
+import { ATTENDU, normaliserMsisdn } from './msisdn.mjs';
 
 function argument(nom, defaut = null) {
   const i = process.argv.indexOf(`--${nom}`);
@@ -57,21 +58,11 @@ function empreintePayload(payload) {
   return createHash('sha256').update(canonique(payload), 'utf8').digest('hex');
 }
 
-/** Même normalisation que le domaine : un numéro entre en base sous une seule forme. */
-function normaliserMsisdn(saisie) {
-  let chiffres = String(saisie).replace(/[\s.\-()]/g, '');
-  if (chiffres.startsWith('+')) chiffres = chiffres.slice(1);
-  else if (chiffres.startsWith('00')) chiffres = chiffres.slice(2);
-  else if (!chiffres.startsWith('221')) chiffres = `221${chiffres}`;
-
-  if (!/^[1-9][0-9]{7,14}$/.test(chiffres)) {
-    console.error(`numéro inexploitable : « ${saisie} »`);
-    process.exit(1);
-  }
-  return `+${chiffres}`;
-}
-
 const msisdn = normaliserMsisdn(telephone);
+if (msisdn === null) {
+  console.error(`numéro inexploitable : « ${telephone} ». Attendu ${ATTENDU}.`);
+  process.exit(1);
+}
 const client = new pg.Client({ connectionString: url });
 await client.connect();
 

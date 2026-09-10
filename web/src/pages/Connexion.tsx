@@ -92,7 +92,9 @@ export function Connexion() {
                 onChange={(e) => setTelephone(e.target.value)}
                 required
               />
-              <p className="aide">Sans indicatif, ou avec : les deux fonctionnent.</p>
+              <p className="aide">
+                Sénégal ou Côte d’Ivoire. Sans indicatif, ou avec : les deux fonctionnent.
+              </p>
             </label>
 
             {erreur !== null && <p className="message erreur">{erreur}</p>}
