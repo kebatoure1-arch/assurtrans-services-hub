@@ -50,6 +50,7 @@ import {
 } from '../application/admin/manage-directory.ts';
 import type { TableauDeBord } from '../application/admin/tableau-de-bord.ts';
 import type { AuditLogger } from '../ports/audit.ts';
+import type { JournalAudit } from '../ports/journal.ts';
 import type { ReleveRepository } from '../ports/rapprochement.ts';
 import type { EnvoyerLesBons } from '../application/envoyer-les-bons.ts';
 import {
@@ -130,6 +131,11 @@ export interface ServerDeps {
    */
   readonly rapprochement?: RapprocherLaPeriode;
   readonly releve?: ReleveRepository;
+  /**
+   * Consultation du journal d'audit. Lecture seule : il n'existe aucune route d'ecriture
+   * depuis l'exterieur, et il n'en existera pas.
+   */
+  readonly journal?: JournalAudit;
 }
 
 declare module 'fastify' {
@@ -887,6 +893,66 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       return reply.send(await deps.releve.listerSurPeriode(debut, fin));
     },
   );
+
+  /**
+   * Journal d'audit.
+   *
+   * Reserve a l'ADMIN : le journal dit qui a fait quoi, et cela ne regarde ni un chauffeur ni
+   * un pompiste. Il ne rend que des empreintes, jamais un payload — la table n'en conserve
+   * aucun, et c'est une decision inscrite dans le schema.
+   */
+  app.get<{
+    Querystring: {
+      action?: string;
+      acteur?: string;
+      cible?: string;
+      depuis?: string;
+      jusqua?: string;
+      curseur?: string;
+      limite?: string;
+    };
+  }>('/api/admin/journal', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    if (deps.journal === undefined) return erreur(reply, 503, 'journal indisponible');
+
+    const jour = /^\d{4}-\d{2}-\d{2}$/;
+    const { depuis, jusqua, curseur } = req.query;
+    if (depuis !== undefined && !jour.test(depuis)) {
+      return erreur(reply, 400, 'depuis attendu au format AAAA-MM-JJ');
+    }
+    if (jusqua !== undefined && !jour.test(jusqua)) {
+      return erreur(reply, 400, 'jusqua attendu au format AAAA-MM-JJ');
+    }
+    // Le curseur est un identifiant sequentiel : tout le reste est une tentative d'injection
+    // ou une erreur d'appelant, et dans les deux cas on refuse plutot que de deviner.
+    if (curseur !== undefined && !/^\d+$/.test(curseur)) {
+      return erreur(reply, 400, 'curseur invalide');
+    }
+
+    const limite = Number(req.query.limite ?? '50');
+    const page = await deps.journal.consulter(
+      {
+        action: req.query.action,
+        acteur: req.query.acteur,
+        cibleId: req.query.cible,
+        depuis,
+        jusqua,
+      },
+      curseur ?? null,
+      Number.isInteger(limite) ? limite : 50,
+    );
+
+    return reply.send(page);
+  });
+
+  app.get('/api/admin/journal/actions', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    if (deps.journal === undefined) return erreur(reply, 503, 'journal indisponible');
+
+    return reply.send(await deps.journal.actionsConnues());
+  });
 
   app.post('/api/paiements/session', async (req, reply) => {
     const principal = await exigerRole(req, reply, ['DRIVER', 'ADMIN']);

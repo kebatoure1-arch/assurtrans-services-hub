@@ -146,6 +146,8 @@ compilation — et `test/msisdn.spec.ts` prouve que les deux restent d'accord.
 | `GET /api/admin/rapprochements/:periode` | `ADMIN` | lignes de la periode et etat du blocage |
 | `POST /api/admin/rapprochements` | `ADMIN` | rapproche une periode ; refuse si le releve est vide |
 | `POST /api/admin/rapprochements/lignes/:id/resoudre` | `ADMIN` | clot une ligne, avec sa raison |
+| `GET /api/admin/journal` | `ADMIN` | journal d'audit, filtre et pagine par cle |
+| `GET /api/admin/journal/actions` | `ADMIN` | actions reellement presentes, pour le filtre |
 | `GET /api/bons` | `DRIVER` | ses bons ; le jeton du QR n'accompagne que ceux encore utilisables |
 | `GET /api/bons/:id` | `DRIVER` (le sien), `ADMIN`, `STATION_OPERATOR` | consultation |
 
@@ -420,8 +422,7 @@ Dans l'ordre où cela devrait être fait :
    il expedie aujourd'hui par SMS. Brancher WhatsApp revient a ecrire un `ExpediteurDeBon` de
    plus, sans toucher au worker.
 3. `Scheduler` : jobs at-least-once, verrou via `job_locks`, intention de reglement a J-n.
-4. Consultation du journal d'audit — `audit_events` se remplit, rien ne le lit.
-5. Import du releve de consommation TE — **format a obtenir** (§14, parametre 4).
+4. Import du releve de consommation TE — **format a obtenir** (§14, parametre 4).
 6. PWA installable (manifest, service worker, file d'actions hors ligne, Web Push VAPID).
 7. Jeu d'enregistrements de reponses reelles en sandbox Wave.
 

@@ -200,6 +200,24 @@ export interface MouvementReleve {
   readonly contrepartie: string | null;
 }
 
+export interface EvenementJournal {
+  readonly id: string;
+  readonly ts: string;
+  /** Identifiant du compte, ou un nom de mecanisme : `reprise`, `envoi`, `amorcage`. */
+  readonly acteur: string;
+  readonly acteurNom: string | null;
+  readonly action: string;
+  readonly cibleType: string;
+  readonly cibleId: string;
+  /** SHA-256 du payload. Le payload lui-meme n'est jamais conserve. */
+  readonly empreinte: string;
+}
+
+export interface PageJournal {
+  readonly evenements: EvenementJournal[];
+  readonly curseurSuivant: string | null;
+}
+
 export interface EtatPilotage {
   readonly contrat: {
     readonly numeroCompte: string;
@@ -347,6 +365,30 @@ export const api = {
       contrepartie: string | null;
     },
   ) => appeler<{ ajoute: true }>('/api/admin/releve', { methode: 'POST', corps: mouvement, jeton }),
+
+  journal: (
+    jeton: string,
+    filtre: {
+      action?: string;
+      acteur?: string;
+      cible?: string;
+      depuis?: string;
+      jusqua?: string;
+      curseur?: string;
+    } = {},
+  ) => {
+    const q = new URLSearchParams();
+    for (const [cle, valeur] of Object.entries(filtre)) {
+      if (valeur !== undefined && valeur !== '') q.set(cle, valeur);
+    }
+    const suffixe = q.toString();
+    return appeler<PageJournal>(`/api/admin/journal${suffixe === '' ? '' : `?${suffixe}`}`, {
+      jeton,
+    });
+  },
+
+  actionsDuJournal: (jeton: string) =>
+    appeler<string[]>('/api/admin/journal/actions', { jeton }),
 
   reprendreEnvois: (jeton: string) =>
     appeler<{ examinees: number; retrouvees: number; enRevue: number; ignoree?: string }>(

@@ -15,7 +15,15 @@ import type { Session } from '../src/lib/api.ts';
 
 export interface AppelEnregistre {
   readonly methode: string;
+  /** Chemin seul, sans la requête. */
   readonly chemin: string;
+  /**
+   * Paramètres de requête.
+   *
+   * Un écran de consultation met ses filtres et son curseur là, pas dans le corps : les
+   * ignorer reviendrait à ne pas pouvoir vérifier ce qu'un écran demande vraiment.
+   */
+  readonly requete: Record<string, string>;
   readonly corps: Record<string, unknown> | null;
   readonly autorisation: string | null;
 }
@@ -50,13 +58,15 @@ export class FauxServeur {
 
   installer(): this {
     vi.stubGlobal('fetch', async (url: string, options: RequestInit = {}) => {
-      const chemin = new URL(url).pathname;
+      const analysee = new URL(url);
+      const chemin = analysee.pathname;
       const methode = options.method ?? 'GET';
       const entetes = (options.headers ?? {}) as Record<string, string>;
 
       const appel: AppelEnregistre = {
         methode,
         chemin,
+        requete: Object.fromEntries(analysee.searchParams),
         corps: typeof options.body === 'string' ? JSON.parse(options.body) : null,
         autorisation: entetes.authorization ?? null,
       };

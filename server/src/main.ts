@@ -48,6 +48,7 @@ import {
 } from './infra/db/pg-rapprochement.ts';
 import { CycleReglement } from './application/settlement/cycle-reglement.ts';
 import { ReprendreEnvoisInterrompus } from './application/settlement/reprise.ts';
+import { PgJournalAudit } from './infra/db/pg-journal.ts';
 import { PgVerrouTravaux } from './infra/db/pg-verrou.ts';
 import { ExpediteurJournal, ExpediteurSms } from './infra/envoi/expediteurs.ts';
 import {
@@ -245,6 +246,7 @@ async function main(): Promise<void> {
     envoi,
     rapprochement,
     releve: new PgReleveRepository(db),
+    journal: new PgJournalAudit(db),
     reglement:
       contrat === null
         ? undefined

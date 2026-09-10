@@ -10,7 +10,7 @@ npm run build
 ```
 
 ```bash
-npm test         # 109 tests d'interface
+npm test         # 124 tests d'interface
 ```
 
 L'adresse de l'API se regle par `ASSURTRANS_API` (defaut `http://localhost:3001`). C'est la
@@ -29,6 +29,7 @@ exportee dans le terminal l'emporte donc sur le fichier.
 | Reglement | `ADMIN` | qu'est-ce qui doit partir chez TotalEnergies, et qui l'approuve ? |
 | Rapprochement | `ADMIN` | l'argent parti correspond-il a ce qu'on devait ? |
 | Referentiel | `ADMIN` | qui sont les chauffeurs, stations et operateurs ? |
+| Journal | `ADMIN` | qui a fait quoi, quand, sur quoi ? |
 
 Le role decide de l'ecran : un chauffeur ne voit jamais celui du pompiste. Seul
 l'administrateur a une navigation, parce que lui seul a plusieurs choses a faire.
@@ -67,8 +68,8 @@ dakarois.
 
 - Le service worker conserve le shell et le dernier bon utilisable du chauffeur. Il ne met pas en
   file les paiements et ne permet pas au pompiste de valider hors ligne.
-- La consultation du journal d'audit n'a pas d'ecran : `audit_events` se remplit, rien ne le
-  lit.
+- Le journal d'audit se consulte mais ne s'exporte pas : pas de CSV, pas d'impression. Une
+  demande d'auditeur se sert encore en SQL.
 - Le releve du portefeuille se saisit a la main, ligne par ligne. Wave ne documente aucun
   endpoint pour le lire, et en deviner un ferait rapprocher des chiffres inventes.
 - L'ecran du reglement n'affiche pas l'historique des gestes d'une intention : il montre l'etat
