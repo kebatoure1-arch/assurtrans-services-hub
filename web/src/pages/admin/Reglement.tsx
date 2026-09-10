@@ -53,6 +53,11 @@ function motifLisible(erreur: ErreurApi): string {
       return 'Code incorrect ou expiré. Demandez-en un nouveau.';
     case 'PLAFOND_DEPASSE':
       return 'Plafond serveur dépassé. Ce montant ne peut pas partir aujourd’hui.';
+    case 'RAPPROCHEMENT_A_SOLDER':
+      return (
+        'Le rapprochement précédent laisse un écart ou un orphelin non résolu. Soldez-le dans ' +
+        'l’onglet Rapprochement avant d’ordonnancer un nouveau règlement.'
+      );
     case 'NUMERO_DEJA_UTILISE':
       return 'Une facture porte déjà ce numéro. Corrigez le numéro.';
     case 'TRANSITION_INTERDITE':

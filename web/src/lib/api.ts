@@ -159,6 +159,47 @@ export interface Reglement {
   readonly ecartXof: number | null;
 }
 
+export type StatutRapprochement = 'MATCHED' | 'VARIANCE' | 'ORPHAN';
+
+export interface LigneRapprochement {
+  readonly id: string;
+  readonly periode: string;
+  readonly statut: StatutRapprochement;
+  readonly invoiceId: string | null;
+  readonly paymentIntentId: string | null;
+  readonly waveTransactionId: string | null;
+  /** `constate - attendu`. Negatif = on a regle moins que du. */
+  readonly ecartXof: number;
+  readonly toleranceXof: number;
+  readonly motif: string;
+  readonly resoluPar: string | null;
+  readonly resoluA: string | null;
+  readonly note: string | null;
+}
+
+export interface ResumeRapprochement {
+  readonly resume: {
+    readonly matched: number;
+    readonly variance: number;
+    readonly orphan: number;
+    readonly enAttente: number;
+  };
+  readonly integrite: {
+    readonly toutesTransactionsClassees: boolean;
+    readonly transactionsNonClassees: readonly string[];
+  };
+  readonly bloqueCycleSuivant: boolean;
+}
+
+export interface MouvementReleve {
+  readonly id: string;
+  readonly waveTxId: string;
+  readonly dateTx: string;
+  readonly sens: 'IN' | 'OUT';
+  readonly montant: number;
+  readonly contrepartie: string | null;
+}
+
 export interface EtatPilotage {
   readonly contrat: {
     readonly numeroCompte: string;
@@ -272,6 +313,41 @@ export const api = {
    * Relance l'examen des envois interrompus. Ne reemet jamais : interroge le fournisseur et
    * enregistre ce qu'il repond.
    */
+  rapprochement: (jeton: string, periode: string) =>
+    appeler<{ lignes: LigneRapprochement[]; cycleBloque: boolean }>(
+      `/api/admin/rapprochements/${periode}`,
+      { jeton },
+    ),
+
+  rapprocher: (jeton: string, periode: string, toleranceXof: number) =>
+    appeler<ResumeRapprochement>('/api/admin/rapprochements', {
+      methode: 'POST',
+      corps: { periode, toleranceXof },
+      jeton,
+    }),
+
+  // L'acteur n'est jamais transmis : le serveur le lit dans le jeton.
+  resoudreEcart: (jeton: string, id: string, note: string) =>
+    appeler<{ resolu: true }>(`/api/admin/rapprochements/lignes/${id}/resoudre`, {
+      methode: 'POST',
+      corps: { note },
+      jeton,
+    }),
+
+  releve: (jeton: string, debut: string, fin: string) =>
+    appeler<MouvementReleve[]>(`/api/admin/releve?debut=${debut}&fin=${fin}`, { jeton }),
+
+  ajouterAuReleve: (
+    jeton: string,
+    mouvement: {
+      waveTxId: string;
+      dateTx: string;
+      sens: 'IN' | 'OUT';
+      montantXof: number;
+      contrepartie: string | null;
+    },
+  ) => appeler<{ ajoute: true }>('/api/admin/releve', { methode: 'POST', corps: mouvement, jeton }),
+
   reprendreEnvois: (jeton: string) =>
     appeler<{ examinees: number; retrouvees: number; enRevue: number; ignoree?: string }>(
       '/api/admin/reprise',

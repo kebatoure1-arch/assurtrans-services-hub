@@ -31,6 +31,7 @@ import type {
 import {
   CycleReglement,
   ConcurrenceError,
+  CycleBloqueError,
   FactureIntrouvableError,
   IntentionIntrouvableError,
   NumeroFactureDejaUtiliseError,
@@ -222,6 +223,30 @@ describe('préparation', () => {
 
     expect(seconde.id).not.toBe(premiere.id);
     expect(seconde.statut).toBe('DRAFT');
+  });
+
+  it('refuse d’ordonnancer tant que le rapprochement précédent n’est pas soldé', async () => {
+    // §11. Ordonnancer par-dessus un mouvement de fonds qu'on ne s'explique pas, c'est empiler
+    // une seconde inconnue sur la premiere.
+    await factures.saveIfNew(facture());
+    const bloque = new CycleReglement({
+      factures,
+      intentions,
+      canal,
+      limites: { maxUnitaireXof: xof(5_000_000), maxQuotidienXof: xof(20_000_000) },
+      referenceImputation: 'ATS/{numero}',
+      horloge: () => '2026-09-08T10:00:00.000Z',
+      nouvelId: () => 'id-bloque',
+      nouvelleCle: () => 'cle-bloque',
+      cycleBloque: async () => true,
+    });
+
+    await expect(bloque.preparer({ invoiceId: FACTURE, acteur: 'awa' })).rejects.toThrow(
+      CycleBloqueError,
+    );
+
+    // Rien n'a ete ecrit : un refus ne laisse pas de brouillon orphelin derriere lui.
+    expect(intentions.lignes.size).toBe(0);
   });
 
   it('inscrit la référence d’imputation attendue par le fournisseur', async () => {

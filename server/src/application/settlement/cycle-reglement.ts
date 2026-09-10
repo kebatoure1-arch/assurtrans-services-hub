@@ -67,6 +67,23 @@ export class NumeroFactureDejaUtiliseError extends Error {
  * Ce n'est pas une erreur technique à réessayer. C'est le signe qu'une autre personne agit sur
  * la même intention, et la seule conduite correcte est de relire.
  */
+/**
+ * Le rapprochement de la période précédente laisse un écart ou un orphelin non résolu.
+ *
+ * §11 : le cycle suivant ne s'ordonnance pas tant que le précédent n'est pas soldé. Ce n'est
+ * pas une précaution de confort — ordonnancer par-dessus un mouvement de fonds qu'on ne
+ * s'explique pas, c'est empiler une seconde inconnue sur la première.
+ */
+export class CycleBloqueError extends Error {
+  constructor() {
+    super(
+      'le rapprochement précédent laisse un écart ou un orphelin non résolu : ' +
+        'soldez-le avant d’ordonnancer un nouveau règlement',
+    );
+    this.name = 'CycleBloqueError';
+  }
+}
+
 export class ConcurrenceError extends Error {
   constructor(message: string) {
     super(message);
@@ -90,6 +107,14 @@ export interface CycleDeps {
   /** Tirage de la clé d'idempotence. Un UUID par tentative d'envoi, jamais réutilisé. */
   readonly nouvelleCle: () => string;
   readonly audit?: AuditLogger;
+  /**
+   * Le rapprochement laisse-t-il quelque chose de non résolu ?
+   *
+   * Injecté plutôt qu'importé : le cycle n'a pas à connaître le rapprochement, il a seulement
+   * besoin de savoir s'il a le droit d'avancer. Absent, rien ne bloque — c'est le cas du
+   * harnais de démonstration.
+   */
+  readonly cycleBloque?: () => Promise<boolean>;
 }
 
 export class CycleReglement {
@@ -113,6 +138,13 @@ export class CycleReglement {
    * son propre montant serait une interface qui décide de ce qu'on paie.
    */
   async preparer(input: { invoiceId: string; acteur: string }): Promise<PaymentIntent> {
+    // Le contrôle vient AVANT toute écriture : un règlement refusé ne doit pas laisser
+    // derrière lui une intention en brouillon que quelqu'un reprendra sans savoir pourquoi
+    // elle existe.
+    if (this.deps.cycleBloque !== undefined && (await this.deps.cycleBloque())) {
+      throw new CycleBloqueError();
+    }
+
     const facture = await this.deps.factures.findById(input.invoiceId);
     if (facture === null) throw new FactureIntrouvableError(input.invoiceId);
 

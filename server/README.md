@@ -9,7 +9,7 @@ depuis un portefeuille **Wave Business** détenu par l'entité.
 ```bash
 cd server
 npm install
-npm test              # 326 tests
+npm test              # 340 tests
 npm run typecheck
 npm run scan:secrets
 npm run build && npm start
@@ -120,6 +120,10 @@ MissingSecretError : secret WAVE_API_KEY absent ou vide : aucun repli n'est prev
 | `POST /api/admin/reglements/:id/rapprocher` | `ADMIN` | clot le cycle, marque la facture reglee |
 | `POST /api/admin/reprise` | `ADMIN` | relance la reprise des envois interrompus ; ne reemet jamais |
 | `POST /api/admin/envois` | `ADMIN` | pousse la file d'envoi des bons aux chauffeurs |
+| `GET`/`POST /api/admin/releve` | `ADMIN` | releve du portefeuille, saisi a la main |
+| `GET /api/admin/rapprochements/:periode` | `ADMIN` | lignes de la periode et etat du blocage |
+| `POST /api/admin/rapprochements` | `ADMIN` | rapproche une periode ; refuse si le releve est vide |
+| `POST /api/admin/rapprochements/lignes/:id/resoudre` | `ADMIN` | clot une ligne, avec sa raison |
 | `GET /api/bons` | `DRIVER` | ses bons ; le jeton du QR n'accompagne que ceux encore utilisables |
 | `GET /api/bons/:id` | `DRIVER` (le sien), `ADMIN`, `STATION_OPERATOR` | consultation |
 
@@ -276,6 +280,7 @@ server/
 │   │   ├── redeem-voucher-at-station.ts  Scan du pompiste → consommation atomique
 │   │   ├── authenticate-by-phone.ts      Demande de code, ouverture de session
 │   │   ├── envoyer-les-bons.ts           Worker d'envoi : le jeton se reconstruit, ne se relit pas
+│   │   ├── rapprocher.ts                 Rapprochement : un releve vide n'est pas un succes
 │   │   └── admin/
 │   │       ├── manage-directory.ts       Référentiel : unicité du numéro, changements de statut
 │   │       ├── tableau-de-bord.ts        Encours, projection, activité, incidents
@@ -392,7 +397,7 @@ Dans l'ordre où cela devrait être fait :
    il expedie aujourd'hui par SMS. Brancher WhatsApp revient a ecrire un `ExpediteurDeBon` de
    plus, sans toucher au worker.
 3. `Scheduler` : jobs at-least-once, verrou via `job_locks`, intention de reglement a J-n.
-4. Ecran de rapprochement a trois voies, et consultation du journal d'audit.
+4. Consultation du journal d'audit — `audit_events` se remplit, rien ne le lit.
 5. Import du releve de consommation TE — **format a obtenir** (§14, parametre 4).
 6. PWA installable (manifest, service worker, file d'actions hors ligne, Web Push VAPID).
 7. Jeu d'enregistrements de reponses reelles en sandbox Wave.

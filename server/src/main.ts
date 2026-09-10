@@ -40,6 +40,12 @@ import { TableauDeBord } from './application/admin/tableau-de-bord.ts';
 import { hostname } from 'node:os';
 import { PgAuditLogger } from './infra/audit/audit-logger.ts';
 import { EnvoyerLesBons } from './application/envoyer-les-bons.ts';
+import { RapprocherLaPeriode } from './application/rapprocher.ts';
+import {
+  PgRapprochementRepository,
+  PgReleveRepository,
+  PgSourcesDuRapprochement,
+} from './infra/db/pg-rapprochement.ts';
 import { CycleReglement } from './application/settlement/cycle-reglement.ts';
 import { ReprendreEnvoisInterrompus } from './application/settlement/reprise.ts';
 import { PgVerrouTravaux } from './infra/db/pg-verrou.ts';
@@ -168,6 +174,20 @@ async function main(): Promise<void> {
     audit: new PgAuditLogger(db),
   });
 
+  // Rapprochement a trois voies. Le releve se saisit a la main : aucun endpoint Wave
+  // documente ne le rend, et en deviner un ferait rapprocher des chiffres inventes.
+  const rangementRapprochement = new PgRapprochementRepository(db, db);
+  const rapprochement =
+    contrat === null
+      ? undefined
+      : new RapprocherLaPeriode({
+          sources: new PgSourcesDuRapprochement(db),
+          rangement: rangementRapprochement,
+          contractId: contrat.id,
+          horloge: () => new Date().toISOString(),
+          audit: new PgAuditLogger(db),
+        });
+
   const app = buildServer({
     encaissement: resolveCollectionChannel(
       { canal: config.canalEncaissement },
@@ -223,6 +243,8 @@ async function main(): Promise<void> {
     contractId: contrat?.id,
     reprise,
     envoi,
+    rapprochement,
+    releve: new PgReleveRepository(db),
     reglement:
       contrat === null
         ? undefined
@@ -240,6 +262,8 @@ async function main(): Promise<void> {
             nouvelId: () => uuid.next(),
             nouvelleCle: () => uuid.next(),
             audit: new PgAuditLogger(db),
+            // §11 : un ecart non resolu bloque l'ordonnancement du cycle suivant.
+            cycleBloque: () => rangementRapprochement.resteDesLignesBloquantes(),
           }),
   });
 

@@ -50,10 +50,18 @@ import {
 } from '../application/admin/manage-directory.ts';
 import type { TableauDeBord } from '../application/admin/tableau-de-bord.ts';
 import type { AuditLogger } from '../ports/audit.ts';
+import type { ReleveRepository } from '../ports/rapprochement.ts';
 import type { EnvoyerLesBons } from '../application/envoyer-les-bons.ts';
+import {
+  LigneIntrouvableError,
+  NoteRequiseError,
+  type RapprocherLaPeriode,
+  ReleveVideError,
+} from '../application/rapprocher.ts';
 import type { ReprendreEnvoisInterrompus } from '../application/settlement/reprise.ts';
 import {
   ConcurrenceError,
+  CycleBloqueError,
   CycleReglement,
   FactureIntrouvableError,
   IntentionIntrouvableError,
@@ -116,6 +124,12 @@ export interface ServerDeps {
    * attendre, ce qui compte le jour ou un chauffeur appelle en disant n'avoir rien recu.
    */
   readonly envoi?: EnvoyerLesBons;
+  /**
+   * Rapprochement a trois voies. Le releve est expose a part : il s'alimente a la main, faute
+   * d'endpoint Wave documente.
+   */
+  readonly rapprochement?: RapprocherLaPeriode;
+  readonly releve?: ReleveRepository;
 }
 
 declare module 'fastify' {
@@ -189,6 +203,26 @@ const CorpsPreparation = z.object({
 /** L'execution exige un code frais, envoye au numero enregistre de l'operateur (§9). */
 const CorpsExecution = z.object({
   code: z.string().regex(/^\d{6}$/),
+});
+
+/** Une periode de rapprochement se designe par son dernier jour : c'est un arrete. */
+const CorpsRapprochement = z.object({
+  periode: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // Entier de francs. Zero en l'absence de justification ecrite d'une tolerance.
+  toleranceXof: z.number().int().min(0).default(0),
+});
+
+const CorpsResolution = z.object({
+  note: z.string().trim().min(1).max(500),
+});
+
+/** Une ligne du releve du portefeuille, saisie depuis le portail Wave Business. */
+const CorpsMouvement = z.object({
+  waveTxId: z.string().trim().min(1).max(128),
+  dateTx: z.string().min(10).max(40),
+  sens: z.enum(['IN', 'OUT']),
+  montantXof: z.number().int().positive(),
+  contrepartie: z.string().trim().max(200).nullable().optional(),
 });
 
 const CorpsNouvelOperateur = z.object({
@@ -501,6 +535,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
    * generique laisserait l'administrateur cliquer a nouveau sur un bouton qui ne marchera pas.
    */
   function refusReglement(reply: FastifyReply, cause: unknown): FastifyReply | null {
+    if (cause instanceof CycleBloqueError) {
+      // §11. Sans cette traduction, l'administrateur recevait « erreur interne » et n'avait
+      // aucun moyen de comprendre qu'il lui faut d'abord solder son rapprochement.
+      return refus(reply, 409, 'RAPPROCHEMENT_A_SOLDER');
+    }
     if (cause instanceof NumeroFactureDejaUtiliseError) {
       return refus(reply, 409, 'NUMERO_DEJA_UTILISE');
     }
@@ -721,6 +760,133 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
     return reply.send(await deps.envoi.executer());
   });
+
+  // ------------------------------------------------------- rapprochement
+
+  function refusRapprochement(reply: FastifyReply, cause: unknown): FastifyReply | null {
+    if (cause instanceof ReleveVideError) {
+      // 409 et non 400 : la demande est bonne, c'est l'etat du systeme qui ne s'y prete pas.
+      return refus(reply, 409, 'RELEVE_VIDE');
+    }
+    if (cause instanceof NoteRequiseError) return refus(reply, 400, 'NOTE_REQUISE');
+    if (cause instanceof LigneIntrouvableError) return refus(reply, 409, 'DEJA_RESOLUE');
+    return null;
+  }
+
+  async function avecRapprochement<T>(
+    reply: FastifyReply,
+    bloc: (r: RapprocherLaPeriode) => Promise<T>,
+  ): Promise<T | FastifyReply> {
+    if (deps.rapprochement === undefined) {
+      return erreur(reply, 503, 'rapprochement indisponible');
+    }
+    try {
+      return await bloc(deps.rapprochement);
+    } catch (cause) {
+      const r = refusRapprochement(reply, cause);
+      if (r !== null) return r;
+      throw cause;
+    }
+  }
+
+  app.get<{ Params: { periode: string } }>(
+    '/api/admin/rapprochements/:periode',
+    async (req, reply) => {
+      const principal = await exigerRole(req, reply, ['ADMIN']);
+      if (principal === null) return reply;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.periode)) {
+        return erreur(reply, 400, 'periode attendue au format AAAA-MM-JJ');
+      }
+      return avecRapprochement(reply, async (r) =>
+        reply.send({
+          lignes: await r.lignes(req.params.periode),
+          cycleBloque: await r.cycleBloque(),
+        }),
+      );
+    },
+  );
+
+  app.post('/api/admin/rapprochements', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+
+    const corps = CorpsRapprochement.safeParse(req.body);
+    if (!corps.success) return erreur(reply, 400, 'periode attendue au format AAAA-MM-JJ');
+
+    return avecRapprochement(reply, async (r) =>
+      reply.send(
+        await r.executer({
+          periode: corps.data.periode,
+          toleranceXof: xof(corps.data.toleranceXof),
+          acteur: principal.subject,
+        }),
+      ),
+    );
+  });
+
+  app.post<{ Params: { id: string } }>(
+    '/api/admin/rapprochements/lignes/:id/resoudre',
+    async (req, reply) => {
+      const principal = await exigerRole(req, reply, ['ADMIN']);
+      if (principal === null) return reply;
+
+      const corps = CorpsResolution.safeParse(req.body);
+      if (!corps.success) return refus(reply, 400, 'NOTE_REQUISE');
+
+      return avecRapprochement(reply, async (r) => {
+        await r.resoudre({
+          id: req.params.id,
+          acteur: principal.subject,
+          note: corps.data.note,
+        });
+        return reply.send({ resolu: true });
+      });
+    },
+  );
+
+  /**
+   * Saisie du releve du portefeuille.
+   *
+   * Aucun endpoint Wave documente ne rend le releve — `fetchStatement` leve, et c'est voulu :
+   * deviner une URL ferait rapprocher des chiffres inventes. Les lignes se saisissent donc
+   * depuis le portail Wave Business, et l'index unique sur `wave_tx_id` absorbe les doubles
+   * frappes, qui sont la regle dans une saisie manuelle.
+   */
+  app.post('/api/admin/releve', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    if (deps.releve === undefined) return erreur(reply, 503, 'releve indisponible');
+
+    const corps = CorpsMouvement.safeParse(req.body);
+    if (!corps.success) return erreur(reply, 400, 'mouvement incomplet');
+
+    const pose = await deps.releve.ajouterSiNouveau({
+      id: deps.ids.next(),
+      waveTxId: corps.data.waveTxId,
+      dateTx: corps.data.dateTx,
+      sens: corps.data.sens,
+      montant: xof(corps.data.montantXof),
+      contrepartie: corps.data.contrepartie ?? null,
+    });
+
+    return pose
+      ? reply.code(201).send({ ajoute: true })
+      : refus(reply, 409, 'MOUVEMENT_DEJA_SAISI');
+  });
+
+  app.get<{ Querystring: { debut?: string; fin?: string } }>(
+    '/api/admin/releve',
+    async (req, reply) => {
+      const principal = await exigerRole(req, reply, ['ADMIN']);
+      if (principal === null) return reply;
+      if (deps.releve === undefined) return erreur(reply, 503, 'releve indisponible');
+
+      const { debut, fin } = req.query;
+      if (!debut || !fin) return erreur(reply, 400, 'debut et fin attendus');
+
+      return reply.send(await deps.releve.listerSurPeriode(debut, fin));
+    },
+  );
 
   app.post('/api/paiements/session', async (req, reply) => {
     const principal = await exigerRole(req, reply, ['DRIVER', 'ADMIN']);
