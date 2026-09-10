@@ -80,6 +80,18 @@ class FileEnMemoire implements VoucherDeliveryQueue {
     this.envois.push(d);
     return `envoi-${this.envois.length}`;
   }
+
+  // Ces doublures ne servent qu'à l'émission : la dépile est éprouvée dans
+  // `envoi-des-bons.spec.ts` et contre une vraie base.
+  async reclamer() {
+    return [];
+  }
+  async marquerEnvoye() {
+    /* sans objet ici */
+  }
+  async marquerEchec() {
+    /* sans objet ici */
+  }
 }
 
 function compteur(prefixe: string) {

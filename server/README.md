@@ -9,7 +9,7 @@ depuis un portefeuille **Wave Business** détenu par l'entité.
 ```bash
 cd server
 npm install
-npm test              # 310 tests
+npm test              # 326 tests
 npm run typecheck
 npm run scan:secrets
 npm run build && npm start
@@ -119,6 +119,7 @@ MissingSecretError : secret WAVE_API_KEY absent ou vide : aucun repli n'est prev
 | `POST /api/admin/reglements/:id/executer` | `ADMIN` | emet l'ordre ; exige le code frais |
 | `POST /api/admin/reglements/:id/rapprocher` | `ADMIN` | clot le cycle, marque la facture reglee |
 | `POST /api/admin/reprise` | `ADMIN` | relance la reprise des envois interrompus ; ne reemet jamais |
+| `POST /api/admin/envois` | `ADMIN` | pousse la file d'envoi des bons aux chauffeurs |
 | `GET /api/bons` | `DRIVER` | ses bons ; le jeton du QR n'accompagne que ceux encore utilisables |
 | `GET /api/bons/:id` | `DRIVER` (le sien), `ADMIN`, `STATION_OPERATOR` | consultation |
 
@@ -253,7 +254,9 @@ server/
 │   ├── 0004_sessions_paiement.sql        Sessions ouvertes : qui paie, et combien
 │   ├── 0005_corrections_schema.sql       Deux écarts schéma/code trouvés par l'intégration
 │   ├── 0006_authentification.sql         Défis OTP, opérateurs authentifiés par téléphone
-│   └── 0007_expiration_tokens.sql        Péremption des sessions
+│   ├── 0007_expiration_tokens.sql        Péremption des sessions
+│   ├── 0008_cycle_reglement.sql          Écart de règlement, clé nullable, index d'envoi
+│   └── 0009_envoi_des_bons.sql           État « en cours », échec motivé, index du worker
 ├── src/
 │   ├── domain/                           Logique métier pure. Zéro I/O.
 │   │   ├── money.ts                      XOF entier. Aucun flottant, aucun centime.
@@ -272,6 +275,7 @@ server/
 │   │   ├── emit-voucher-on-payment.ts    Paiement confirmé → bon émis → QR mis en file
 │   │   ├── redeem-voucher-at-station.ts  Scan du pompiste → consommation atomique
 │   │   ├── authenticate-by-phone.ts      Demande de code, ouverture de session
+│   │   ├── envoyer-les-bons.ts           Worker d'envoi : le jeton se reconstruit, ne se relit pas
 │   │   └── admin/
 │   │       ├── manage-directory.ts       Référentiel : unicité du numéro, changements de statut
 │   │       ├── tableau-de-bord.ts        Encours, projection, activité, incidents
@@ -384,13 +388,14 @@ Dans l'ordre où cela devrait être fait :
    reprise ne peut jamais conclure sur un canal reel : elle met systematiquement en revue, ce
    qui est correct mais reporte tout sur un humain. C'est le parametre qui rendrait la reprise
    reellement automatique.
-2. Envoi WhatsApp — **bloque** : identifiants WhatsApp Business et modele approuve par Meta.
-3. Worker d'envoi et reprise des envois en echec.
-4. `Scheduler` : jobs at-least-once, verrou via `job_locks`, intention de reglement a J-n.
-5. Ecran de rapprochement a trois voies, et consultation du journal d'audit.
-6. Import du releve de consommation TE — **format a obtenir** (§14, parametre 4).
-7. PWA installable (manifest, service worker, file d'actions hors ligne, Web Push VAPID).
-8. Jeu d'enregistrements de reponses reelles en sandbox Wave.
+2. Envoi **WhatsApp** — bloque sur les identifiants Meta. Le worker d'envoi existe et tourne ;
+   il expedie aujourd'hui par SMS. Brancher WhatsApp revient a ecrire un `ExpediteurDeBon` de
+   plus, sans toucher au worker.
+3. `Scheduler` : jobs at-least-once, verrou via `job_locks`, intention de reglement a J-n.
+4. Ecran de rapprochement a trois voies, et consultation du journal d'audit.
+5. Import du releve de consommation TE — **format a obtenir** (§14, parametre 4).
+6. PWA installable (manifest, service worker, file d'actions hors ligne, Web Push VAPID).
+7. Jeu d'enregistrements de reponses reelles en sandbox Wave.
 
 ---
 

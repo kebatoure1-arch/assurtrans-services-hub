@@ -39,9 +39,11 @@ import { ManageDirectory } from './application/admin/manage-directory.ts';
 import { TableauDeBord } from './application/admin/tableau-de-bord.ts';
 import { hostname } from 'node:os';
 import { PgAuditLogger } from './infra/audit/audit-logger.ts';
+import { EnvoyerLesBons } from './application/envoyer-les-bons.ts';
 import { CycleReglement } from './application/settlement/cycle-reglement.ts';
 import { ReprendreEnvoisInterrompus } from './application/settlement/reprise.ts';
 import { PgVerrouTravaux } from './infra/db/pg-verrou.ts';
+import { ExpediteurJournal, ExpediteurSms } from './infra/envoi/expediteurs.ts';
 import {
   PgInvoiceRepository,
   PgPaymentIntentRepository,
@@ -71,6 +73,18 @@ async function main(): Promise<void> {
     ? [await secrets.get('QR_SIGNATURE_SECRET_PRECEDENT')]
     : [];
   const signer = new VoucherSigner(await secrets.get('QR_SIGNATURE_SECRET'), clesHeritees);
+
+  // La passerelle sert deux usages : les codes d'authentification, et l'acheminement des bons
+  // tant que WhatsApp Business n'est pas ouvert. Une seule instance, une seule configuration.
+  const passerelleSms =
+    config.sms.provider === 'AFRICAS_TALKING'
+      ? new AfricasTalkingOtpSender({
+          apiKey: config.sms.apiKey!,
+          username: config.sms.username!,
+          baseUrl: config.sms.baseUrl,
+          senderId: config.sms.senderId,
+        })
+      : new LogOtpSender();
 
   const transport = async (req: {
     method: string;
@@ -128,6 +142,32 @@ async function main(): Promise<void> {
           audit: new PgAuditLogger(db),
         });
 
+  /**
+   * Worker d'envoi des bons.
+   *
+   * Le canal vise est WhatsApp Business ; il reste bloque sur des identifiants Meta. En
+   * attendant, on expedie par la passerelle SMS deja branchee pour les codes — le parcours du
+   * chauffeur fonctionne de bout en bout, avec un canal de moindre confort mais reel.
+   */
+  const envoi = new EnvoyerLesBons({
+    file: new PgVoucherDeliveryQueue(db),
+    expediteur:
+      config.sms.provider === 'LOG'
+        ? new ExpediteurJournal(config.originesAutorisees[0] ?? 'http://localhost:5174')
+        : new ExpediteurSms(
+            passerelleSms,
+            config.originesAutorisees[0] ?? 'http://localhost:5174',
+          ),
+    verrou: new PgVerrouTravaux(db, `${process.pid}@${hostname()}`, 120),
+    bons,
+    signer,
+    horloge: () => new Date().toISOString(),
+    // Trois tentatives, puis la ligne reste en incident : un numero qui ne repond pas demande
+    // un humain, pas une boucle.
+    maxTentatives: 3,
+    audit: new PgAuditLogger(db),
+  });
+
   const app = buildServer({
     encaissement: resolveCollectionChannel(
       { canal: config.canalEncaissement },
@@ -159,15 +199,7 @@ async function main(): Promise<void> {
     originesAutorisees: config.originesAutorisees,
     auth: new AuthenticateByPhone({
       challenges: new PgOtpChallengeRepository(db),
-      sender:
-        config.sms.provider === 'AFRICAS_TALKING'
-          ? new AfricasTalkingOtpSender({
-              apiKey: config.sms.apiKey!,
-              username: config.sms.username!,
-              baseUrl: config.sms.baseUrl,
-              senderId: config.sms.senderId,
-            })
-          : new LogOtpSender(),
+      sender: passerelleSms,
       annuaire: new PgAnnuaireComptes(db),
       jetons: new PgApiTokenIssuer(db),
       ids: uuid,
@@ -190,6 +222,7 @@ async function main(): Promise<void> {
     }),
     contractId: contrat?.id,
     reprise,
+    envoi,
     reglement:
       contrat === null
         ? undefined
@@ -216,6 +249,12 @@ async function main(): Promise<void> {
   // intentions restent en DISPATCHING, et c'est donc au redemarrage qu'il faut aller demander
   // au fournisseur ce qu'elles sont devenues. Le resultat est journalise ; un echec du passage
   // n'empeche pas le serveur de servir.
+  // La file d'envoi se vide toute seule, sans attendre qu'un administrateur y pense : c'est
+  // apres un redemarrage qu'elle risque d'avoir des lignes en souffrance.
+  const bilanEnvoi = await envoi.executer().catch((cause) => ({
+    erreur: cause instanceof Error ? cause.message : String(cause),
+  }));
+
   const bilanReprise = await reprise?.executer().catch((cause) => ({
     erreur: cause instanceof Error ? cause.message : String(cause),
   }));
@@ -233,6 +272,7 @@ async function main(): Promise<void> {
       originesAutorisees: config.originesAutorisees,
       lectureEvenementsArmee: config.checkout.eventType !== '',
       reprise: bilanReprise ?? 'inactive',
+      envoiDesBons: bilanEnvoi,
     }),
   );
 

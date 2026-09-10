@@ -22,6 +22,7 @@ import type {
   DriverPayment,
   DriverPaymentRepository,
   DriverRepository,
+  EnvoiAFaire,
   VoucherDeliveryQueue,
   VoucherRepository,
 } from '../../ports/repositories.ts';
@@ -293,6 +294,69 @@ export class PgVoucherDeliveryQueue implements VoucherDeliveryQueue {
       throw new PersistenceError(`mise en file impossible pour le bon ${demande.voucherId}`);
     }
     return texte(r.rows[0].id, 'voucher_deliveries.id');
+  }
+
+  /**
+   * Reclame des envois, atomiquement.
+   *
+   * `FOR UPDATE SKIP LOCKED` est ce qui rend deux workers sans danger : chacun verrouille les
+   * lignes qu'il prend, et l'autre passe a cote au lieu d'attendre. Un `SELECT` suivi d'un
+   * `UPDATE` les laisserait tous deux expedier le meme bon.
+   *
+   * La ligne passe en `ENVOI_EN_COURS` et son compteur avance **des la reclamation**, pas
+   * apres. Si le worker meurt en plein envoi, la tentative est comptee : sans cela une
+   * passerelle qui fait crasher le processus serait reessayee sans fin.
+   */
+  async reclamer(limite: number, maxTentatives: number): Promise<readonly EnvoiAFaire[]> {
+    const r = await this.db.query(
+      `UPDATE voucher_deliveries d
+          SET statut = 'ENVOI_EN_COURS',
+              tentatives = d.tentatives + 1,
+              updated_at = now()
+        WHERE d.id IN (
+                SELECT id FROM voucher_deliveries
+                 WHERE statut = 'EN_ATTENTE'
+                   AND tentatives < $2
+                 ORDER BY created_at ASC
+                 LIMIT $1
+                 FOR UPDATE SKIP LOCKED)
+        RETURNING d.id, d.voucher_id, d.destinataire, d.tentatives`,
+      [limite, maxTentatives],
+    );
+
+    return r.rows.map((l) => ({
+      id: texte(l.id, 'voucher_deliveries.id'),
+      voucherId: texte(l.voucher_id, 'voucher_deliveries.voucher_id'),
+      destinataire: texte(l.destinataire, 'voucher_deliveries.destinataire'),
+      tentatives: Number(l.tentatives),
+    }));
+  }
+
+  async marquerEnvoye(id: string, reference: string | null): Promise<void> {
+    await this.db.query(
+      `UPDATE voucher_deliveries
+          SET statut = 'ENVOYE', provider_ref = $2, erreur = NULL, updated_at = now()
+        WHERE id = $1`,
+      [id, reference],
+    );
+  }
+
+  /**
+   * Echec d'un envoi.
+   *
+   * La ligne retourne en attente tant qu'il reste des tentatives, et n'est close en `ECHEC`
+   * qu'une fois le plafond atteint. C'est cette bascule qui la fait apparaitre dans les
+   * incidents du tableau de bord : un chauffeur qui a paye sans rien recevoir doit se voir.
+   */
+  async marquerEchec(id: string, motif: string, maxTentatives: number): Promise<void> {
+    await this.db.query(
+      `UPDATE voucher_deliveries
+          SET statut = CASE WHEN tentatives >= $3 THEN 'ECHEC' ELSE 'EN_ATTENTE' END,
+              erreur = $2,
+              updated_at = now()
+        WHERE id = $1`,
+      [id, motif.slice(0, 500), maxTentatives],
+    );
   }
 }
 

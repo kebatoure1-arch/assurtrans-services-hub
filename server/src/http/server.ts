@@ -50,6 +50,7 @@ import {
 } from '../application/admin/manage-directory.ts';
 import type { TableauDeBord } from '../application/admin/tableau-de-bord.ts';
 import type { AuditLogger } from '../ports/audit.ts';
+import type { EnvoyerLesBons } from '../application/envoyer-les-bons.ts';
 import type { ReprendreEnvoisInterrompus } from '../application/settlement/reprise.ts';
 import {
   ConcurrenceError,
@@ -110,6 +111,11 @@ export interface ServerDeps {
    * sans redemarrer, ce qui compte le jour ou une intention reste bloquee.
    */
   readonly reprise?: ReprendreEnvoisInterrompus;
+  /**
+   * Worker d'envoi des bons. La file se vide toute seule ; la route permet de la pousser sans
+   * attendre, ce qui compte le jour ou un chauffeur appelle en disant n'avoir rien recu.
+   */
+  readonly envoi?: EnvoyerLesBons;
 }
 
 declare module 'fastify' {
@@ -700,6 +706,20 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (deps.reprise === undefined) return erreur(reply, 503, 'reprise indisponible');
 
     return reply.send(await deps.reprise.executer());
+  });
+
+  /**
+   * Pousse la file d'envoi des bons.
+   *
+   * Reessayer un envoi est sur : un bon est a usage unique et son jeton est deterministe. Deux
+   * envois donnent deux fois le meme code, dont un seul servira.
+   */
+  app.post('/api/admin/envois', async (req, reply) => {
+    const principal = await exigerRole(req, reply, ['ADMIN']);
+    if (principal === null) return reply;
+    if (deps.envoi === undefined) return erreur(reply, 503, 'envoi indisponible');
+
+    return reply.send(await deps.envoi.executer());
   });
 
   app.post('/api/paiements/session', async (req, reply) => {

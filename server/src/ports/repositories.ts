@@ -67,8 +67,32 @@ export interface DeliveryRequest {
  * Mise en file, pas envoi direct : un chauffeur qui a payé possède son bon même si WhatsApp est
  * indisponible. L'envoi est réessayable ; l'émission du bon ne l'est pas.
  */
+/** Une ligne de la file, telle que le worker la reçoit. Le jeton n'y figure pas. */
+export interface EnvoiAFaire {
+  readonly id: string;
+  readonly voucherId: string;
+  readonly destinataire: string;
+  /** Tentatives déjà faites. Sert à savoir quand renoncer. */
+  readonly tentatives: number;
+}
+
 export interface VoucherDeliveryQueue {
   enqueue(demande: DeliveryRequest): Promise<string>;
+
+  /**
+   * Réclame des envois à faire, en les marquant siens **atomiquement**.
+   *
+   * Deux workers ne doivent pas expédier le même bon : la réclamation est une écriture
+   * conditionnelle, pas une lecture suivie d'une écriture. Les lignes ayant déjà épuisé
+   * `maxTentatives` ne sont plus rendues — on ne réessaie pas indéfiniment un numéro qui ne
+   * répond pas, on le laisse visible en incident.
+   */
+  reclamer(limite: number, maxTentatives: number): Promise<readonly EnvoiAFaire[]>;
+
+  marquerEnvoye(id: string, reference: string | null): Promise<void>;
+
+  /** Remet la ligne en attente si des tentatives restent, la clôt en échec sinon. */
+  marquerEchec(id: string, motif: string, maxTentatives: number): Promise<void>;
 }
 
 export interface CheckoutSession {

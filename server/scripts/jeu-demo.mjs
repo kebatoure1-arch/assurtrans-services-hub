@@ -198,9 +198,21 @@ async function effacer({ silencieux = false } = {}) {
     'DELETE FROM api_tokens WHERE station_id = ANY($1::uuid[]) OR subject = ANY($2::text[])',
     [idsStations, idsPorteurs],
   );
+  // Les sessions de paiement ouvertes par les chauffeurs de demonstration les retiennent :
+  // ouvrir un paiement depuis l'ecran chauffeur suffit a en creer une.
+  await client.query('DELETE FROM checkout_sessions WHERE driver_id = ANY($1::uuid[])', [
+    CHAUFFEURS.map((c) => idDe(c.cle)),
+  ]);
   await client.query('DELETE FROM voucher_deliveries WHERE voucher_id = ANY($1::uuid[])', [idsBons]);
   await client.query('DELETE FROM fuel_vouchers WHERE id = ANY($1::uuid[])', [idsBons]);
   await client.query('DELETE FROM driver_payments WHERE id = ANY($1::uuid[])', [idsPaiements]);
+  // Une intention de reglement referencant la facture de demonstration l'empeche d'etre
+  // retiree. Elle nait des qu'on exerce le cycle sur ce jeu — la retirer d'abord, sinon
+  // `effacer` echoue et le rechargement devient impossible.
+  await client.query(
+    'DELETE FROM payment_intents WHERE invoice_id = $1',
+    [idDe('facture/echue')],
+  );
   await client.query('DELETE FROM invoices WHERE id = $1', [idDe('facture/echue')]);
   await client.query('DELETE FROM operateurs WHERE id = ANY($1::uuid[])', [
     POMPISTES.map((p) => idDe(p.cle)),

@@ -285,8 +285,11 @@ decrire('intégration PostgreSQL — administration', () => {
       );
       const bonId = await bon({ montant: 20_000, statut: 'EMIS' });
       await pool.query(
-        `INSERT INTO voucher_deliveries (id, voucher_id, canal, destinataire, statut)
-         VALUES ($1, $2, 'WHATSAPP', '+221770000001', 'ECHEC')`,
+        // Un echec porte toujours sa raison : la contrainte `voucher_deliveries_echec_motive`
+        // l'exige, parce qu'un incident sans motif ne se diagnostique pas six mois plus tard.
+        `INSERT INTO voucher_deliveries (id, voucher_id, canal, destinataire, statut, erreur,
+                                         tentatives)
+         VALUES ($1, $2, 'WHATSAPP', '+221770000001', 'ECHEC', 'destinataire injoignable', 3)`,
         [uuid(), bonId],
       );
 
