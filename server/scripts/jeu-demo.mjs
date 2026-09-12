@@ -319,7 +319,7 @@ async function charger() {
   // l'administrateur doit voir en premier, parce qu'il est rattrapable.
   await client.query(
     `INSERT INTO voucher_deliveries (id, voucher_id, canal, destinataire, statut, erreur, tentatives)
-     VALUES ($1, $2, 'WHATSAPP', $3, 'ECHEC', 'destinataire injoignable', 3)`,
+     VALUES ($1, $2, 'SMS', $3, 'ECHEC', 'destinataire injoignable', 3)`,
     [idDe('envoi/echec'), idDe('bon/vivant/fatou'), CHAUFFEURS[1].msisdn],
   );
 

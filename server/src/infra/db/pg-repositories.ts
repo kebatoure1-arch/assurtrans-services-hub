@@ -284,9 +284,12 @@ export class PgVoucherDeliveryQueue implements VoucherDeliveryQueue {
    * reconstruit à partir du bon au moment d'expédier.
    */
   async enqueue(demande: DeliveryRequest): Promise<string> {
+    // `INDETERMINE` et non le canal visé : la file ne sait pas par où la ligne partira, et
+    // nommer ici une destination espérée revient à écrire dans la base une information fausse
+    // que rien ne viendra corriger. Le worker inscrit le canal réel en marquant la ligne.
     const r = await this.db.query(
       `INSERT INTO voucher_deliveries (voucher_id, canal, destinataire, statut)
-       VALUES ($1, 'WHATSAPP', $2, 'EN_ATTENTE')
+       VALUES ($1, 'INDETERMINE', $2, 'EN_ATTENTE')
        RETURNING id`,
       [demande.voucherId, demande.destinataire],
     );
@@ -332,12 +335,12 @@ export class PgVoucherDeliveryQueue implements VoucherDeliveryQueue {
     }));
   }
 
-  async marquerEnvoye(id: string, reference: string | null): Promise<void> {
+  async marquerEnvoye(id: string, reference: string | null, canal: string): Promise<void> {
     await this.db.query(
       `UPDATE voucher_deliveries
-          SET statut = 'ENVOYE', provider_ref = $2, erreur = NULL, updated_at = now()
+          SET statut = 'ENVOYE', provider_ref = $2, canal = $3, erreur = NULL, updated_at = now()
         WHERE id = $1`,
-      [id, reference],
+      [id, reference, canal],
     );
   }
 
@@ -348,14 +351,20 @@ export class PgVoucherDeliveryQueue implements VoucherDeliveryQueue {
    * qu'une fois le plafond atteint. C'est cette bascule qui la fait apparaitre dans les
    * incidents du tableau de bord : un chauffeur qui a paye sans rien recevoir doit se voir.
    */
-  async marquerEchec(id: string, motif: string, maxTentatives: number): Promise<void> {
+  async marquerEchec(
+    id: string,
+    motif: string,
+    maxTentatives: number,
+    canal: string,
+  ): Promise<void> {
     await this.db.query(
       `UPDATE voucher_deliveries
           SET statut = CASE WHEN tentatives >= $3 THEN 'ECHEC' ELSE 'EN_ATTENTE' END,
               erreur = $2,
+              canal = $4,
               updated_at = now()
         WHERE id = $1`,
-      [id, motif.slice(0, 500), maxTentatives],
+      [id, motif.slice(0, 500), maxTentatives, canal],
     );
   }
 }

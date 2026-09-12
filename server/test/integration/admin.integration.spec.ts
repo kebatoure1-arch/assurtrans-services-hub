@@ -289,7 +289,7 @@ decrire('intégration PostgreSQL — administration', () => {
         // l'exige, parce qu'un incident sans motif ne se diagnostique pas six mois plus tard.
         `INSERT INTO voucher_deliveries (id, voucher_id, canal, destinataire, statut, erreur,
                                          tentatives)
-         VALUES ($1, $2, 'WHATSAPP', '+221770000001', 'ECHEC', 'destinataire injoignable', 3)`,
+         VALUES ($1, $2, 'SMS', '+221770000001', 'ECHEC', 'destinataire injoignable', 3)`,
         [uuid(), bonId],
       );
 

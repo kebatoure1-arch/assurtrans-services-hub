@@ -136,7 +136,7 @@ export class EnvoyerLesBons {
     }
 
     if (resultat.kind === 'ENVOYE') {
-      await this.deps.file.marquerEnvoye(envoiId, resultat.reference);
+      await this.deps.file.marquerEnvoye(envoiId, resultat.reference, this.deps.expediteur.canal);
       // Le destinataire n'est pas journalisé : l'audit répond à « quoi, quand, sur quoi », pas
       // à « quel numéro de téléphone ».
       await this.tracer('BON_ENVOYE', bon.id, { canal: this.deps.expediteur.canal });
@@ -161,7 +161,12 @@ export class EnvoyerLesBons {
   }
 
   private async renoncer(envoiId: string, motif: string): Promise<void> {
-    await this.deps.file.marquerEchec(envoiId, motif, this.deps.maxTentatives);
+    await this.deps.file.marquerEchec(
+      envoiId,
+      motif,
+      this.deps.maxTentatives,
+      this.deps.expediteur.canal,
+    );
   }
 
   private async tracer(
