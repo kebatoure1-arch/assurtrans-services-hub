@@ -9,7 +9,7 @@ depuis un portefeuille **Wave Business** détenu par l'entité.
 ```bash
 cd server
 npm install
-npm test              # 358 tests
+npm test
 npm run typecheck
 npm run scan:secrets
 npm run build && npm start
@@ -151,7 +151,7 @@ compilation — et `test/msisdn.spec.ts` prouve que les deux restent d'accord.
 | `GET /api/bons` | `DRIVER` | ses bons ; le jeton du QR n'accompagne que ceux encore utilisables |
 | `GET /api/bons/:id` | `DRIVER` (le sien), `ADMIN`, `STATION_OPERATOR` | consultation |
 
-Trois regles y sont verifiees par des tests, parce qu'elles se contournent facilement si on ne
+Cinq regles y sont verifiees par des tests, parce qu'elles se contournent facilement si on ne
 les ecrit pas explicitement :
 
 - **L'acteur d'un reglement vient du jeton, jamais du corps.** Sinon la separation des roles se
@@ -224,12 +224,14 @@ n'existe pas.
 
 Hors périmètre v1. Les montants sont en XOF entiers, sans conversion.
 
-### Il ne remplace pas le wallet client existant du front
+### Il ne remplace aucun wallet client
 
-Le front applicatif (`src/features/fuel/`, `src/features/payments/`) implémente un wallet client
-rechargeable par Mobile Money. Ce module ne s'appuie sur aucune de ces fonctions. Voir la section
-« Constat sur l'existant » de l'ADR-001 : la mise en production conjointe des deux briques expose
-l'entité tant que la question de l'agrément n'est pas tranchée.
+Le front hérité (Devv) portait un wallet rechargeable par Mobile Money dans `src/features/fuel/`
+et `src/features/payments/`. **Il a été supprimé** : `web/` est aujourd'hui autonome et ne
+contient plus ces répertoires. Le risque que décrivait la section « Constat sur l'existant » de
+l'ADR-001 — mettre en production les deux briques tant que la question de l'agrément n'est pas
+tranchée — n'a donc plus de support, mais la règle demeure : ce module n'expose aucune opération
+de crédit de solde, et ne doit pas s'en voir ajouter.
 
 ---
 
@@ -243,7 +245,9 @@ navigateur. L'audit initial a relevé 22 constats bloquants : 13 définitions de
 
 Aucune de ces variables n'était renseignée — les services tournaient en simulation, rien n'a
 fuité. Le risque était que `.env.example` demandait explicitement de les remplir. Une exception
-bien active : `src/lib/qr-crypto.ts` embarque un secret de signature de repli codé en dur.
+était alors active : `src/lib/qr-crypto.ts` embarquait un secret de signature de repli codé en
+dur. Ce fichier a disparu avec l'ancien front ; la signature des bons vit désormais côté serveur,
+dans `src/infra/security/voucher-signature.ts`, sur une clé injectée au démarrage.
 
 Ce qui a été fait :
 
@@ -305,9 +309,10 @@ server/
 │   │   ├── authenticate-by-phone.ts      Demande de code, ouverture de session
 │   │   ├── envoyer-les-bons.ts           Worker d'envoi : le jeton se reconstruit, ne se relit pas
 │   │   ├── rapprocher.ts                 Rapprochement : un releve vide n'est pas un succes
-│   │   └── admin/
-│   │       ├── manage-directory.ts       Référentiel : unicité du numéro, changements de statut
-│   │       ├── tableau-de-bord.ts        Encours, projection, activité, incidents
+│   │   ├── admin/
+│   │   │   ├── manage-directory.ts   Référentiel : unicité du numéro, changements de statut
+│   │   │   └── tableau-de-bord.ts    Encours, projection, activité, incidents
+│   │   └── settlement/
 │   │       ├── cycle-reglement.ts        Facture → intention → double approbation → envoi
 │   │       └── reprise.ts                Envois interrompus : on interroge, on ne réémet jamais
 │   ├── ports/
@@ -316,12 +321,18 @@ server/
 │   │   ├── repositories.ts               Persistance, écritures conditionnelles
 │   │   ├── admin.ts                      Référentiel et pilotage
 │   │   ├── authentication.ts             Défis OTP, sessions
+│   │   ├── settlement.ts                 Cycle de règlement
+│   │   ├── rapprochement.ts              Relevé, lignes, résolution
+│   │   ├── envoi.ts                      File d'envoi, `ExpediteurDeBon`
+│   │   ├── journal.ts                    Lecture paginée du journal d'audit
+│   │   ├── verrou.ts                     Verrou d'exécution partagé
 │   │   └── audit.ts                      Journal en ajout seul
 │   └── infra/
 │       ├── secrets/secrets.ts            Secret non journalisable, refus du préfixe VITE_
 │       ├── security/voucher-signature.ts Signature HMAC du QR, rotation de clé supportée
 │       ├── webhooks/webhook.ts           Signature, fenêtre d'horodatage, déduplication
 │       ├── audit/audit-logger.ts         Écriture dans `audit_events`
+│       ├── envoi/expediteurs.ts          `ExpediteurSms`, `ExpediteurJournal` — un par canal
 │       ├── auth/
 │       │   ├── api-tokens.ts             Jetons porteurs : seule l'empreinte est stockee
 │       │   ├── otp-crypto.ts             Tirage et empreinte du code — la crypto reste ici
@@ -331,6 +342,10 @@ server/
 │       │   ├── pg-repositories.ts        Ecritures conditionnelles, BIGINT lus sans arrondi
 │       │   ├── pg-admin.ts               Référentiel et mesures de pilotage
 │       │   ├── pg-auth.ts                Défis OTP et sessions
+│       │   ├── pg-settlement.ts          Intentions, factures, écarts
+│       │   ├── pg-rapprochement.ts       Relevé saisi, lignes, blocage du cycle
+│       │   ├── pg-journal.ts             Journal d'audit : filtre, pagination par clé
+│       │   ├── pg-verrou.ts              Verrou consultatif PostgreSQL
 │       │   └── pg-pool.ts                Seul fichier qui connait node-postgres
 │       └── wave/
 │           ├── wave-client.ts            HTTP. Endpoints documentés uniquement.
@@ -346,7 +361,8 @@ server/
 │   ├── msisdn.mjs                        Normalisation partagee avec le domaine, prouvee
 │   ├── amorcer.mjs                       Premier administrateur — refuse s'il en existe un
 │   ├── jeu-demo.mjs                      Données de démonstration, bases locales uniquement
-│   └── scan-secrets.mjs                  Scan CI (§11, item 1) + référence figée
+│   ├── scan-secrets.mjs                  Scan CI (§11, item 1)
+│   └── scan-secrets.reference.json       Référence figée du scan — vide aujourd'hui
 └── test/                                 tests unitaires + integration/ pour les contraintes
 ```
 
@@ -423,8 +439,8 @@ Dans l'ordre où cela devrait être fait :
    plus, sans toucher au worker.
 3. `Scheduler` : jobs at-least-once, verrou via `job_locks`, intention de reglement a J-n.
 4. Import du releve de consommation TE — **format a obtenir** (§14, parametre 4).
-6. PWA installable (manifest, service worker, file d'actions hors ligne, Web Push VAPID).
-7. Jeu d'enregistrements de reponses reelles en sandbox Wave.
+5. PWA installable (manifest, service worker, file d'actions hors ligne, Web Push VAPID).
+6. Jeu d'enregistrements de reponses reelles en sandbox Wave.
 
 ---
 

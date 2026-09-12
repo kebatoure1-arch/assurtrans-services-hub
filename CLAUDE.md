@@ -111,7 +111,7 @@ et la référence figée du scan est vide : **tout nouveau constat casse le buil
 | Interface | `web/test/` | ce qu'un écran affiche **et ce qu'il transmet** | le comportement du vrai serveur |
 
 **Le piège à connaître** : sans `DATABASE_URL_TEST`, la suite d'intégration est *ignorée*, pas en
-échec. « 116 tests ignorés » n'est pas « 116 tests passés ». La CI échoue explicitement si elle
+échec. « n tests ignorés » n'est pas « n tests passés ». La CI échoue explicitement si elle
 voit `skipped` — ne retire pas ce garde-fou.
 
 Les tests d'interface traversent le vrai client d'API ; seul `fetch` est remplacé.
