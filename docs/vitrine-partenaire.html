@@ -883,8 +883,10 @@
           <p>
             Celui qui pr&eacute;pare un r&egrave;glement ne peut pas l&rsquo;approuver. Une seconde
             authentification pr&eacute;c&egrave;de l&rsquo;envoi. Et si l&rsquo;issue d&rsquo;un
-            versement reste incertaine &mdash; coupure, r&eacute;ponse ambigu&euml; &mdash; le
-            syst&egrave;me interroge la banque au lieu de renvoyer l&rsquo;argent.
+            versement reste incertaine &mdash; coupure, r&eacute;ponse ambigu&euml; &mdash; rien
+            n&rsquo;est renvoy&eacute; : le syst&egrave;me interroge l&rsquo;op&eacute;rateur quand il
+            d&eacute;tient la r&eacute;f&eacute;rence du versement, et passe la main &agrave; une
+            personne quand il ne la d&eacute;tient pas. Jamais un second envoi.
           </p>
         </div>
       </div>
@@ -974,11 +976,21 @@
     </div>
     <div class="etat">
       <div class="ligne-etat">
-        <span class="quoi">Parcours chauffeur &mdash; paiement, bon, QR</span>
+        <span class="quoi">Parcours chauffeur &mdash; connexion, bon, QR</span>
         <span class="puce livre">Livr&eacute;</span>
         <p class="pourquoi">
           Connexion par num&eacute;ro et code SMS, demande de bon, r&eacute;ception, consultation
           hors r&eacute;seau du dernier bon utilisable.
+        </p>
+      </div>
+      <div class="ligne-etat">
+        <span class="quoi">Encaissement du paiement chauffeur</span>
+        <span class="puce blanc">En marche &agrave; blanc</span>
+        <p class="pourquoi">
+          La cha&icirc;ne va du montant demand&eacute; au bon &eacute;mis, mais le canal
+          d&rsquo;encaissement est verrouill&eacute; lui aussi : le champ par lequel le
+          portefeuille mobile renvoie le chauffeur vers son paiement reste &agrave; confirmer sur
+          la documentation du prestataire. Le syst&egrave;me refuse de le deviner.
         </p>
       </div>
       <div class="ligne-etat">
@@ -1015,14 +1027,25 @@
         </p>
       </div>
       <div class="ligne-etat">
+        <span class="quoi">Option r&eacute;glementaire &mdash; contreseing de la direction</span>
+        <span class="puce tiers">D&eacute;cision interne</span>
+        <p class="pourquoi">
+          Le montage retenu &mdash; bon &agrave; usage unique plut&ocirc;t que solde rechargeable
+          &mdash; est ce qui maintient le service hors du champ de l&rsquo;agr&eacute;ment monnaie
+          &eacute;lectronique. Il est document&eacute; et appliqu&eacute; dans le code ; il reste
+          &agrave; contresigner, et la version en vigueur du texte r&eacute;gional &agrave;
+          v&eacute;rifier, avant toute mise en production.
+        </p>
+      </div>
+      <div class="ligne-etat">
         <span class="quoi">Param&egrave;tres d&rsquo;imputation fournisseur</span>
         <span class="puce tiers">En attente d&rsquo;un tiers</span>
         <p class="pourquoi">
-          Ces &eacute;l&eacute;ments ne d&eacute;pendent pas de nous : coordonn&eacute;es de
-          versement, format de la r&eacute;f&eacute;rence &agrave; porter sur chaque paiement, et
-          mode de restitution des relev&eacute;s. Tant qu&rsquo;ils manquent, ouvrir le canal
-          reviendrait &agrave; envoyer de l&rsquo;argent sans savoir sur quel compte il
-          s&rsquo;impute.
+          Coordonn&eacute;es de versement, format de la r&eacute;f&eacute;rence &agrave; porter sur
+          chaque paiement, mode de restitution des relev&eacute;s, plafond d&rsquo;encours
+          accord&eacute; : ceux-l&agrave; ne d&eacute;pendent pas de nous. Tant qu&rsquo;ils
+          manquent, ouvrir le canal reviendrait &agrave; envoyer de l&rsquo;argent sans savoir sur
+          quel compte il s&rsquo;impute.
         </p>
       </div>
     </div>
@@ -1034,15 +1057,19 @@
     <div class="oeil">Prochaine &eacute;tape</div>
     <h2>Ce qu&rsquo;il faut pour passer en r&eacute;el.</h2>
     <p>
-      Le travail restant n&rsquo;est pas du d&eacute;veloppement : c&rsquo;est une poign&eacute;e
-      d&rsquo;informations contractuelles. D&egrave;s qu&rsquo;elles sont connues, la marche &agrave;
-      blanc se l&egrave;ve sans nouvelle version &agrave; livrer.
+      Lever les deux marches &agrave; blanc ne demande pas de nouvelle version : ce sont des
+      param&egrave;tres de configuration, et le code les attend d&eacute;j&agrave;. Ce qui manque
+      est contractuel et d&eacute;cisionnel, pas technique. D&rsquo;autres chantiers restent
+      ouverts au-del&agrave; de cette mise en service &mdash; import automatique des relev&eacute;s,
+      envoi par messagerie instantan&eacute;e, ordonnanceur des &eacute;ch&eacute;ances &mdash; mais
+      aucun ne conditionne le passage en r&eacute;el.
     </p>
     <ul class="attentes">
       <li>Les coordonn&eacute;es exactes du compte &agrave; cr&eacute;diter chez le fournisseur.</li>
       <li>Le format de la r&eacute;f&eacute;rence d&rsquo;imputation &agrave; porter sur chaque versement.</li>
       <li>Le mode et la p&eacute;riodicit&eacute; de restitution des factures et relev&eacute;s.</li>
       <li>Le plafond d&rsquo;encours accord&eacute; et les seuils d&rsquo;alerte convenus.</li>
+      <li>Le contreseing de la direction sur l&rsquo;option r&eacute;glementaire retenue.</li>
     </ul>
   </div>
 </div>
