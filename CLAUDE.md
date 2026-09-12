@@ -136,10 +136,11 @@ Ce que le système ne fait **pas**, et ne doit pas se voir ajouter par confort :
   358 unitaires, 116 d'intégration, 116 d'interface. `README.md` annonce 274/40/64,
   `web/README.md` 124. Ne cite aucun de ces chiffres sans recompter ; si tu touches une suite,
   corrige les README plutôt que d'en ajouter un quatrième.
-- **`server/.env.example` déclare trois variables lues nulle part** : `RESEND_API_KEY`,
-  `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` (vérifié : aucune lecture dans `src/` ni `scripts/`).
-  C'est exactement le risque que l'audit des secrets avait traité — un fichier d'exemple qui
-  invite à renseigner un secret sans emplacement réel. À supprimer.
+- **Le scan de secrets ne voit pas les variables orphelines.** Il travaille sur une référence
+  figée et cherche des valeurs, pas des noms déclarés puis jamais lus. `RESEND_API_KEY`,
+  `TWILIO_ACCOUNT_SID` et `TWILIO_AUTH_TOKEN` avaient survécu ainsi dans `.env.example` ; elles
+  sont retirées. Avant d'ajouter une variable, vérifie qu'elle est réellement lue — un exemple
+  qui invite à renseigner un secret sans emplacement réel est exactement ce que l'audit a traité.
 - **Les préfixes mobiles se périment.** La liste vit à deux endroits, `src/domain/otp.ts` et
   `scripts/msisdn.mjs` (les scripts tournent avant toute compilation) ; `test/msisdn.spec.ts`
   prouve qu'ils restent d'accord. Modifier l'un sans l'autre casse la suite — c'est voulu.
