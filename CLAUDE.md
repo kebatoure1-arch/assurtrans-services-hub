@@ -151,6 +151,18 @@ Ce que le système ne fait **pas**, et ne doit pas se voir ajouter par confort :
   prouve qu'ils restent d'accord. Modifier l'un sans l'autre casse la suite — c'est voulu.
 - **Migrations** : versionnées et jamais réécrites. Un écart schéma/code se corrige par une
   nouvelle migration (cf. `0005_corrections_schema.sql`).
+- **Audit des dépendances : la production bloque, l'outillage informe.** La CI échoue si
+  `npm audit --omit=dev --audit-level=moderate` remonte quoi que ce soit, des deux côtés —
+  aujourd'hui zéro. Les advisories d'outillage sont imprimées sans bloquer : une CI rouge en
+  permanence sur `vitest` ne protège plus de rien. Ne fusionne pas les deux étapes.
+- **Le total de `npm audit` n'est pas un nombre d'advisories.** La sortie lisible groupe par
+  advisory ; le total compte les nœuds de l'arbre et leur attribue une sévérité agrégée. Le
+  serveur affiche « 1 critical » pour `vitest` alors que les deux seules advisories réelles
+  (`@vitest/mocker`, `esbuild`) sont *moderate* — la sévérité remonte parce que le nœud dépend
+  de plusieurs nœuds vulnérables. Lire le détail par paquet, jamais le total.
+- **`server/` est en retard sur `web/` pour l'outillage de test** : `vitest@2.1.9` contre
+  `vitest@^5` et `vite@^6` côté frontend. C'est la source des deux advisories d'outillage, et
+  la montée est déjà prouvée possible dans ce dépôt puisque `web/` tourne dessus.
 - **Ordre CI** : le scan de secrets passe **avant** les tests. Un secret exposé rend le reste sans
   objet — ne réordonne pas les étapes.
 
