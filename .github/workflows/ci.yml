@@ -121,14 +121,18 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-  # Constat, pas encore un verrou. Le depot n'a jamais regarde ses advisories : on les
-  # imprime d'abord, on decide de bloquer ensuite, en connaissance de cause. Bloquer a
-  # l'aveugle sur `npm audit` rend la CI rouge pour une advisory transitive d'outil de test
-  # sans rapport avec ce qui tourne en production.
+  # Deux questions que le resume de `npm ci` confond, et qui n'ont pas le meme poids.
+  #
+  # Ce qui tourne en production est un verrou : une advisory dans fastify, pg ou react
+  # atteint un utilisateur. Rien ne doit partir avec.
+  #
+  # Ce qui ne sert qu'a construire et tester est un constat imprime : une advisory dans
+  # vitest ou esbuild ne touche que des postes de developpement et des runners. La traiter
+  # comme bloquante rendrait la CI rouge sur du bruit, et une CI rouge en permanence ne
+  # protege plus de rien.
   audit:
     name: Vulnérabilités des dépendances
     runs-on: ubuntu-latest
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
@@ -137,18 +141,34 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Serveur — dépendances de production
+      - name: Serveur — production, bloquant
         working-directory: server
-        run: npm audit --omit=dev || true
+        run: npm audit --omit=dev --audit-level=moderate
 
-      - name: Serveur — tout, outils de développement compris
+      - name: Frontend — production, bloquant
+        working-directory: web
+        run: npm audit --omit=dev --audit-level=moderate
+
+      # Constat. Le decompte par severite vient du JSON : la sortie lisible groupe par
+      # advisory et son total ne correspond pas au nombre de lignes affichees.
+      - name: Serveur — outillage, constat
         working-directory: server
-        run: npm audit || true
+        run: |
+          npm audit || true
+          npm audit --json 2>/dev/null | node -e '
+            let t="";process.stdin.on("data",d=>t+=d).on("end",()=>{
+              const v=JSON.parse(t).vulnerabilities||{};
+              console.log("--- severite par paquet ---");
+              for (const [n,o] of Object.entries(v)) console.log(`${o.severity.padEnd(8)} ${n}`);
+            })' || true
 
-      - name: Frontend — dépendances de production
+      - name: Frontend — outillage, constat
         working-directory: web
-        run: npm audit --omit=dev || true
-
-      - name: Frontend — tout, outils de développement compris
-        working-directory: web
-        run: npm audit || true
+        run: |
+          npm audit || true
+          npm audit --json 2>/dev/null | node -e '
+            let t="";process.stdin.on("data",d=>t+=d).on("end",()=>{
+              const v=JSON.parse(t).vulnerabilities||{};
+              console.log("--- severite par paquet ---");
+              for (const [n,o] of Object.entries(v)) console.log(`${o.severity.padEnd(8)} ${n}`);
+            })' || true
