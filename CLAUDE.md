@@ -80,7 +80,7 @@ Chacun est adossé à un test. Les toucher demande une décision explicite, pas 
 | L'acteur, la station, le chauffeur viennent **du jeton, jamais du corps** de la requête | sinon la séparation des rôles se contourne en envoyant le nom d'un collègue |
 | Le montant d'un règlement vient **de la facture**, jamais du corps | une interface qui propose son montant décide de ce qu'on paie |
 | Le montant d'un bon vient **de la session enregistrée**, jamais du webhook | un événement au montant divergent n'émet aucun bon (422) |
-| Un préparateur **n'approuve pas** sa propre intention | §9 ; doublé en base (`pi_separation_des_roles`) et dans le domaine |
+| Un préparateur **n'approuve pas** sa propre intention | §9 du cahier des charges ; doublé en base (`pi_separation_des_roles`) et dans le domaine |
 | **Aucun réessai d'un mouvement d'argent** | timeout / 5xx / 2xx inexploitable ⇒ `AMBIGUOUS` ⇒ `NEEDS_REVIEW` ⇒ humain. Seuls les `GET` sont réessayables |
 | La reprise **interroge, ne réémet jamais** | sans identifiant de payout, l'intention part en revue humaine |
 | Un bon ne se consomme **qu'une fois** ; rejouer un scan ne sert pas deux fois | `UPDATE ... WHERE statut = $attendu` |

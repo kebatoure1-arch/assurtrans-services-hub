@@ -6,6 +6,12 @@ depuis un portefeuille **Wave Business** détenu par l'entité.
 État : **fondations posées, exécution réelle verrouillée.** Le canal de règlement est en
 `DRY_RUN` et le restera tant que les paramètres 1, 2, 3 et 5 du §14 ne sont pas obtenus.
 
+> **Renvois.** Un `§n` désigne une section du cahier des charges, qui ne fait pas partie de ce
+> dépôt ; le §14 y est la liste des paramètres bloquants, reproduite en fin de document. Le
+> runbook numérote ses propres sections et y renvoie par « §n de ce runbook » : les deux
+> numérotations se croisent sans se correspondre — le §4 du cahier des charges est l'option
+> réglementaire, le §4 du runbook est un double règlement constaté.
+
 ```bash
 cd server
 npm install
@@ -135,7 +141,7 @@ compilation — et `test/msisdn.spec.ts` prouve que les deux restent d'accord.
 | `GET`/`POST /api/admin/factures` | `ADMIN` | liste et enregistre les factures TotalEnergies |
 | `GET`/`POST /api/admin/reglements` | `ADMIN` | liste les intentions ; en prepare une depuis une facture |
 | `POST /api/admin/reglements/:id/soumettre` | `ADMIN` | passe en attente d'approbation |
-| `POST /api/admin/reglements/:id/approuver` | `ADMIN` | **jamais le preparateur** (§9) |
+| `POST /api/admin/reglements/:id/approuver` | `ADMIN` | **jamais le preparateur** (§9, separation des roles) |
 | `POST /api/admin/reglements/:id/annuler` | `ADMIN` | libere la facture pour une nouvelle intention |
 | `POST /api/admin/reglements/:id/confirmation` | `ADMIN` | envoie un code au numero **enregistre** de l'operateur |
 | `POST /api/admin/reglements/:id/executer` | `ADMIN` | emet l'ordre ; exige le code frais |
@@ -361,7 +367,7 @@ server/
 │   ├── msisdn.mjs                        Normalisation partagee avec le domaine, prouvee
 │   ├── amorcer.mjs                       Premier administrateur — refuse s'il en existe un
 │   ├── jeu-demo.mjs                      Données de démonstration, bases locales uniquement
-│   ├── scan-secrets.mjs                  Scan CI (§11, item 1)
+│   ├── scan-secrets.mjs                  Scan CI (§11 item 1, controle continu)
 │   └── scan-secrets.reference.json       Référence figée du scan — vide aujourd'hui
 └── test/                                 tests unitaires + integration/ pour les contraintes
 ```

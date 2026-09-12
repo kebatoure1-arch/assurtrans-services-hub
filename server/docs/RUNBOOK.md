@@ -3,6 +3,10 @@
 Règle qui prime sur toutes les autres : **en cas de doute sur un mouvement d'argent, on ne
 rejoue rien.** On constate, on documente, on tranche à deux.
 
+Les renvois « §n de ce runbook » désignent les sections numérotées ci-dessous. Un `§n` nu, dans
+`server/README.md` ou dans un ADR, renvoie au cahier des charges, dont la numérotation est
+indépendante — les deux se croisent sans se correspondre.
+
 ---
 
 ## 1. Rotation de la clé API Wave
@@ -36,7 +40,7 @@ Symptôme : `REJECTED` avec un 401/403 sur des intentions successives.
    ordres-là ne dépend pas de la clé courante.
 3. Pour chaque intention restée en `DISPATCHING` : passer en `NEEDS_REVIEW`, motif
    `clé révoquée en cours de job`. Ne pas renvoyer.
-4. Restaurer une clé valide (§1), puis traiter les `NEEDS_REVIEW` un par un.
+4. Restaurer une clé valide (§1 de ce runbook), puis traiter les `NEEDS_REVIEW` un par un.
 
 ---
 
@@ -106,7 +110,7 @@ Cas : un règlement a été effectué à la main depuis l'application Wave, en p
 1. Le règlement manuel apparaît au rapprochement en `ORPHAN` — sortie sans intention.
 2. Ne pas créer une intention rétroactive pour « faire propre » : cela masquerait l'incident.
    Créer une ligne de rapprochement résolue à la main, avec l'auteur et la note.
-3. Traiter le trop-versé selon §4.
+3. Traiter le trop-versé selon §4 de ce runbook.
 4. Cause racine : un accès direct au portefeuille reste ouvert. Décider si cet accès doit être
    restreint ; sinon l'incident se reproduira.
 
@@ -121,7 +125,7 @@ Symptôme : `REJECTED` avec un motif de fonds insuffisants.
    (ADR-001).
 3. Préparer une nouvelle intention avec une nouvelle clé d'idempotence.
 4. Si l'échéance est dépassée : vérifier la pénalité de retard au contrat TE et le risque de
-   suspension des cartes (§8).
+   suspension des cartes (§8 de ce runbook).
 
 Prévention : surveiller la projection d'atteinte du seuil de blocage, pas le solde Wave.
 
@@ -169,6 +173,6 @@ Symptôme : webhooks rejetés en masse pour horodatage hors fenêtre, ou échéa
 Le solde reste consultable, les payouts échouent.
 
 1. Toutes les intentions passent en `FAILED` ou `AMBIGUOUS` selon la réponse. Traiter les
-   ambiguës selon §3.
+   ambiguës selon §3 de ce runbook.
 2. Suspendre l'ordonnancement tant que le portefeuille n'est pas réactivé.
 3. Si l'échéance TE approche : prévenir TotalEnergies avant l'échéance, pas après.
