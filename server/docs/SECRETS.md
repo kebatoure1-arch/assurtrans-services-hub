@@ -64,9 +64,9 @@ dans une interpolation, ni dans un `JSON.stringify` de la configuration complèt
 | `VITE_TPE_API_SECRET` | — | ✅ supprimé | idem |
 | `VITE_TPE_MERCHANT_ID` | — | ✅ supprimé | idem |
 | `VITE_TPE_WEBHOOK_SECRET` | — | ✅ supprimé | `tpe-webhook-handler.ts` supprimé |
-| `VITE_RESEND_API_KEY` | `RESEND_API_KEY` | ✅ supprimé | ancien front supprimé |
-| `VITE_TWILIO_ACCOUNT_SID` | `TWILIO_ACCOUNT_SID` | ✅ supprimé | ancien front supprimé |
-| `VITE_TWILIO_AUTH_TOKEN` | `TWILIO_AUTH_TOKEN` | ✅ supprimé | ancien front supprimé |
+| `VITE_RESEND_API_KEY` | — | ✅ supprimé | ancien front supprimé ; aucun envoi d'e-mail côté serveur |
+| `VITE_TWILIO_ACCOUNT_SID` | — | ✅ supprimé | ancien front supprimé ; la passerelle SMS est Africa's Talking |
+| `VITE_TWILIO_AUTH_TOKEN` | — | ✅ supprimé | idem |
 | `VITE_AFRICAS_TALKING_API_KEY` | `AFRICAS_TALKING_API_KEY` | ✅ supprimé | ancien front supprimé |
 | `VITE_ORANGE_MONEY_*` | — | ⬜ à décider | dépend du sort du wallet client (ADR-001) |
 | `VITE_FREE_MONEY_*` | — | ⬜ à décider | idem |
