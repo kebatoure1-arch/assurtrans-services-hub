@@ -120,3 +120,35 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
+  # Constat, pas encore un verrou. Le depot n'a jamais regarde ses advisories : on les
+  # imprime d'abord, on decide de bloquer ensuite, en connaissance de cause. Bloquer a
+  # l'aveugle sur `npm audit` rend la CI rouge pour une advisory transitive d'outil de test
+  # sans rapport avec ce qui tourne en production.
+  audit:
+    name: Vulnérabilités des dépendances
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Serveur — dépendances de production
+        working-directory: server
+        run: npm audit --omit=dev || true
+
+      - name: Serveur — tout, outils de développement compris
+        working-directory: server
+        run: npm audit || true
+
+      - name: Frontend — dépendances de production
+        working-directory: web
+        run: npm audit --omit=dev || true
+
+      - name: Frontend — tout, outils de développement compris
+        working-directory: web
+        run: npm audit || true
