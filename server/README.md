@@ -82,8 +82,8 @@ DATABASE_URL_TEST=postgres://assurtrans:developpement-local-uniquement@localhost
 ```
 
 Sans `DATABASE_URL_TEST`, la suite est **ignoree** plutot qu'en echec : un poste sans base ne
-doit pas voir rouge pour cette raison. Attention a ne pas confondre « 40 tests ignores » avec
-« 40 tests passes ».
+doit pas voir rouge pour cette raison. Attention a ne pas confondre « n tests ignores » avec
+« n tests passes ».
 
 Sans configuration, le serveur refuse de demarrer et nomme la variable manquante :
 
@@ -347,7 +347,7 @@ server/
 │   ├── amorcer.mjs                       Premier administrateur — refuse s'il en existe un
 │   ├── jeu-demo.mjs                      Données de démonstration, bases locales uniquement
 │   └── scan-secrets.mjs                  Scan CI (§11, item 1) + référence figée
-└── test/                                 274 tests unitaires + 40 d'intégration
+└── test/                                 tests unitaires + integration/ pour les contraintes
 ```
 
 ### Garanties couvertes par les tests
@@ -433,10 +433,15 @@ Dans l'ordre où cela devrait être fait :
 | # | Paramètre | Source | Bloque | État |
 |---|---|---|---|---|
 | 1 | B2B ID ou numéro Wave désigné de TotalEnergies | TE, par écrit | exécution réelle | ⛔ |
-| 2 | Format de la référence d'imputation attendue par TE | TE, par écrit | rapprochement côté TE | ⛔ |
+| 2 | Format de la référence d'imputation attendue par TE | TE, par écrit | exécution réelle et rapprochement côté TE | ⛔ |
 | 3 | Encours autorisé et délai de règlement contractuel | Contrat TE | moteur d'encours | ⛔ |
 | 4 | Format du relevé de consommation TE | TE | import consommation | ⛔ |
 | 5 | Option réglementaire §4 | Décision interne | architecture | 📝 proposée en ADR-001, à contresigner |
 | 6 | Plafonds Wave du portefeuille Business | Wave Business | plafonds serveur | ⛔ |
 
-Tant que 1, 3 et 5 ne sont pas levés, `canal_reglement` reste à `DRY_RUN`.
+Tant que 1, 2, 3 et 5 ne sont pas levés, `canal_reglement` reste à `DRY_RUN`.
+
+Le 2 est tenu par le code, pas par la discipline : `loadConfig()` refuse tout canal autre que
+`DRY_RUN` sans `WAVE_PAYOUT_REFERENCE_FIELD` (`src/config.ts`), un versement sans référence
+d'imputation étant irrattachable côté TotalEnergies. Le 1 l'est par la base : la contrainte
+`CHECK` de la migration 0001 exige `te_b2b_id` pour `B2B`, `te_msisdn` pour `MOBILE`.

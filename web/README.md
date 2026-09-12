@@ -10,7 +10,7 @@ npm run build
 ```
 
 ```bash
-npm test         # 124 tests d'interface
+npm test         # tests d'interface
 ```
 
 L'adresse de l'API se regle par `ASSURTRANS_API` (defaut `http://localhost:3001`). C'est la

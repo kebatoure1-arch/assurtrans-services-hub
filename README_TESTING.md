@@ -36,7 +36,7 @@ La suite tourne sur `assurtrans_test`, jamais sur la base de développement : so
 vide tout le référentiel.
 
 Sans `DATABASE_URL_TEST`, la suite est **ignorée** plutôt qu'en échec. Attention à ne pas
-confondre « 40 tests ignorés » avec « 40 tests passés » — la ligne de résumé de vitest distingue
+confondre « n tests ignorés » avec « n tests passés » — la ligne de résumé de vitest distingue
 `skipped` de `passed`.
 
 ## Interface

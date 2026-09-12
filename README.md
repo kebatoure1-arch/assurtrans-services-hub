@@ -64,9 +64,9 @@ Trois tâches, en parallèle :
 
 | Tâche | Contenu |
 |---|---|
-| Module de règlement | scan de secrets, typecheck, 274 tests |
-| Contraintes de la base | PostgreSQL 16 en service, migrations, 40 tests d'intégration |
-| Frontend autonome | typecheck, 64 tests d'interface, build |
+| Module de règlement | scan de secrets, typecheck, tests unitaires — domaine, cas d'usage, routes HTTP |
+| Contraintes de la base | PostgreSQL 16 en service, migrations, tests d'intégration — les contraintes tiennent |
+| Frontend autonome | typecheck, tests d'interface — ce qu'un écran affiche et ce qu'il transmet, build |
 
 Le scan de secrets passe en premier — un secret exposé rend le reste sans objet.
 

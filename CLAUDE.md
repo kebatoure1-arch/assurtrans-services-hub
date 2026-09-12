@@ -118,9 +118,13 @@ Les tests d'interface traversent le vrai client d'API ; seul `fetch` est remplac
 
 ## État du système
 
-Le canal de règlement est en **`DRY_RUN`** et y reste tant que les paramètres **1, 3 et 5 du
+Le canal de règlement est en **`DRY_RUN`** et y reste tant que les paramètres **1, 2, 3 et 5 du
 §14** (`server/README.md`) ne sont pas obtenus de TotalEnergies et de la direction. Aucun
 mouvement d'argent réel ne part.
+
+Deux de ces quatre sont tenus par le code, pas par la discipline : `loadConfig()` refuse tout
+canal autre que `DRY_RUN` sans `WAVE_PAYOUT_REFERENCE_FIELD` (paramètre 2), et la contrainte
+`CHECK` de la migration 0001 exige `te_b2b_id` ou `te_msisdn` selon le canal (paramètre 1).
 
 Ce que le système ne fait **pas**, et ne doit pas se voir ajouter par confort :
 - pas de solde rechargeable (cf. supra) ;
@@ -132,10 +136,11 @@ Ce que le système ne fait **pas**, et ne doit pas se voir ajouter par confort :
 
 ## Points d'attention connus
 
-- **Les nombres de tests des README sont désynchronisés.** Comptage statique réel :
-  358 unitaires, 116 d'intégration, 116 d'interface. `README.md` annonce 274/40/64,
-  `web/README.md` 124. Ne cite aucun de ces chiffres sans recompter ; si tu touches une suite,
-  corrige les README plutôt que d'en ajouter un quatrième.
+- **N'écris aucun nombre de tests dans un document.** Les README en annonçaient quatre jeux
+  (274/40/64/124) contre un comptage réel de 358 unitaires, 116 d'intégration et 122 d'interface ;
+  ils ont été retirés plutôt que corrigés, un compteur en dur redevenant faux au commit suivant.
+  Le chiffre d'interface illustre le piège : 116 déclarations `it(`, mais deux `it.each` portant
+  5 et 3 cas, donc 122 tests exécutés. Décris ce qu'une suite prouve, pas combien elle en compte.
 - **Le scan de secrets ne voit pas les variables orphelines.** Il travaille sur une référence
   figée et cherche des valeurs, pas des noms déclarés puis jamais lus. `RESEND_API_KEY`,
   `TWILIO_ACCOUNT_SID` et `TWILIO_AUTH_TOKEN` avaient survécu ainsi dans `.env.example` ; elles
