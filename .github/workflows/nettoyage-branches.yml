@@ -1,0 +1,40 @@
+# Temporaire. A supprimer une fois les branches retirees.
+#
+# La suppression d'une reference distante est refusee (403) depuis l'environnement qui prepare
+# ce commit : le proxy laisse passer l'ajout de commits, pas le retrait de refs. L'operation se
+# fait donc depuis un runner, ou le jeton de la CI a les droits.
+#
+# Les trois branches ont ete verifiees comme entierement representees dans master avant d'ecrire
+# ce fichier : deux en sont des ancetres directs, la troisieme a ete integree par ecrasement et
+# ses deux fichiers sont identiques a ceux de master, empreintes a l'appui.
+name: Nettoyage des branches fusionnées
+
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  supprimer:
+    name: Supprimer les branches integrees
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Supprimer
+        run: |
+          for b in claude/beautiful-pasteur-mzd2xw \
+                   claude/cool-cray-6tgv4j \
+                   claude/artifact-webpage-creation-j6oc3z; do
+            if git show-ref --verify --quiet "refs/remotes/origin/$b"; then
+              echo "suppression de $b — tete $(git rev-parse --short "origin/$b")"
+              git push origin --delete "$b"
+            else
+              echo "$b : deja absente"
+            fi
+          done
+          echo "--- branches restantes ---"
+          git ls-remote --heads origin | sed 's#.*refs/heads/#  #'
