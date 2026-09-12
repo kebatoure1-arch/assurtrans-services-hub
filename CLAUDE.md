@@ -73,7 +73,8 @@ le sens des dépendances, ou parcours du mode `DRY_RUN` du règlement.
 
 ## Journal
 
-- 2026-09-12 — Portage des OSP Marketing Tools (serveur MCP amont) en
-  compétences natives, puis sortie du dépôt vers la portée utilisateur. Reste
-  extractible de l'historique : `git archive 0814965 .claude/skills`.
-  Création de ce fichier.
+- 2026-09-12 — Création de ce fichier. Les compétences *OSP Marketing Tools*,
+  portées depuis le serveur MCP amont, ont été installées en portée utilisateur
+  (`~/.claude/skills/`) et ne sont pas versionnées ici ; la branche de travail
+  qui les portait a vocation à disparaître. Source de vérité pour les
+  regénérer : <https://github.com/open-strategy-partners/osp_marketing_tools>.
