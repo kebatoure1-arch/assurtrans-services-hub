@@ -182,32 +182,45 @@ decrire('intégration PostgreSQL — file d’envoi', () => {
       const id = await empiler();
       await file.reclamer(10, 3);
 
-      await file.marquerEnvoye(id, 'wamid.42');
+      await file.marquerEnvoye(id, 'ATXid_42', 'SMS');
 
       const r = await pool.query(
-        'SELECT statut, provider_ref, erreur FROM voucher_deliveries WHERE id = $1',
+        'SELECT statut, provider_ref, canal, erreur FROM voucher_deliveries WHERE id = $1',
         [id],
       );
-      expect(r.rows[0]).toMatchObject({ statut: 'ENVOYE', provider_ref: 'wamid.42', erreur: null });
+      // Le canal est celui par lequel c'est parti, pas celui qu'on visait a la mise en file :
+      // la ligne y entre en INDETERMINE et n'apprend son canal qu'ici.
+      expect(r.rows[0]).toMatchObject({
+        statut: 'ENVOYE',
+        provider_ref: 'ATXid_42',
+        canal: 'SMS',
+        erreur: null,
+      });
     });
 
     it('remet en attente tant qu’il reste des tentatives', async () => {
       const id = await empiler();
       await file.reclamer(10, 3);
 
-      await file.marquerEchec(id, 'coupure réseau', 3);
+      await file.marquerEchec(id, 'coupure réseau', 3, 'SMS');
 
-      const r = await pool.query('SELECT statut, erreur FROM voucher_deliveries WHERE id = $1', [
-        id,
-      ]);
-      expect(r.rows[0]).toMatchObject({ statut: 'EN_ATTENTE', erreur: 'coupure réseau' });
+      const r = await pool.query(
+        'SELECT statut, erreur, canal FROM voucher_deliveries WHERE id = $1',
+        [id],
+      );
+      // Un echec dit aussi par ou on a essaye, sinon l'incident ne se diagnostique pas.
+      expect(r.rows[0]).toMatchObject({
+        statut: 'EN_ATTENTE',
+        erreur: 'coupure réseau',
+        canal: 'SMS',
+      });
     });
 
     it('clôt en échec une fois le plafond atteint, ce qui la rend visible en incident', async () => {
       const id = await empiler();
       await file.reclamer(10, 1);
 
-      await file.marquerEchec(id, 'numéro injoignable', 1);
+      await file.marquerEchec(id, 'numéro injoignable', 1, 'SMS');
 
       const r = await pool.query('SELECT statut FROM voucher_deliveries WHERE id = $1', [id]);
       expect(r.rows[0].statut).toBe('ECHEC');
@@ -224,7 +237,7 @@ decrire('intégration PostgreSQL — file d’envoi', () => {
       const id = await empiler();
       await file.reclamer(10, 3);
 
-      await file.marquerEchec(id, 'x'.repeat(5000), 3);
+      await file.marquerEchec(id, 'x'.repeat(5000), 3, 'SMS');
 
       const r = await pool.query('SELECT erreur FROM voucher_deliveries WHERE id = $1', [id]);
       expect(r.rows[0].erreur.length).toBeLessThanOrEqual(500);

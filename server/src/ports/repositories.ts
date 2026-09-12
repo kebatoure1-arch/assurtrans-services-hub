@@ -89,10 +89,20 @@ export interface VoucherDeliveryQueue {
    */
   reclamer(limite: number, maxTentatives: number): Promise<readonly EnvoiAFaire[]>;
 
-  marquerEnvoye(id: string, reference: string | null): Promise<void>;
+  /**
+   * `canal` est celui par lequel l'envoi vient réellement de partir, pas celui qu'on visait.
+   * Il n'est connu qu'ici : la mise en file ignore quel expéditeur sera configuré quand la
+   * ligne sera réclamée, et la configuration peut changer entre les deux.
+   */
+  marquerEnvoye(id: string, reference: string | null, canal: string): Promise<void>;
 
-  /** Remet la ligne en attente si des tentatives restent, la clôt en échec sinon. */
-  marquerEchec(id: string, motif: string, maxTentatives: number): Promise<void>;
+  /**
+   * Remet la ligne en attente si des tentatives restent, la clôt en échec sinon.
+   *
+   * `canal` est celui qui vient d'échouer : une ligne close en `ECHEC` doit dire par où on a
+   * essayé, sinon l'incident du tableau de bord ne se diagnostique pas.
+   */
+  marquerEchec(id: string, motif: string, maxTentatives: number, canal: string): Promise<void>;
 }
 
 export interface CheckoutSession {
