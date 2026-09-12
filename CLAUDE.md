@@ -154,6 +154,20 @@ Ce que le système ne fait **pas**, et ne doit pas se voir ajouter par confort :
 - **Ordre CI** : le scan de secrets passe **avant** les tests. Un secret exposé rend le reste sans
   objet — ne réordonne pas les étapes.
 
+## Documents publiés
+
+`docs/vitrine-partenaire.html` — présentation partenaire, pour un décideur non technique :
+parcours de bout en bout, garde-fous, pilotage de l'encours, état réel du projet.
+
+**Règle qui s'applique à toute mise à jour de ce document : aucun chiffre, logo, témoignage ni
+référence client inventé.** Les valeurs affichées sont des exemples, et le document le dit.
+L'état du projet y est décrit tel qu'il est, marches à blanc comprises — celle du règlement
+fournisseur comme celle de l'encaissement chauffeur. Une vitrine qui promet plus que le code ne
+tient coûte la relation qu'elle cherche à ouvrir.
+
+Corollaire pratique : toute affirmation de capacité doit se vérifier dans le code ou dans un
+ADR. « Livré » veut dire exécutable en réel, pas « la chaîne fonctionne en marche à blanc ».
+
 ## Compétences
 
 Ce dépôt n'embarque aucune compétence : `.claude/` ne contient que `launch.json`. Les compétences
