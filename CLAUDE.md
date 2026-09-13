@@ -175,6 +175,31 @@ Ce que le système ne fait **pas**, et ne doit pas se voir ajouter par confort :
 - **Ordre CI** : le scan de secrets passe **avant** les tests. Un secret exposé rend le reste sans
   objet — ne réordonne pas les étapes.
 
+## Travailler sur ce dépôt depuis une session d'agent
+
+Quatre pièges qui ont coûté cher une fois chacun, et qui se reproduiront.
+
+- **Regarde les autres branches avant d'écrire.** Trois `CLAUDE.md` ont coexisté sur trois
+  branches parallèles, rédigés par trois sessions qui ne se voyaient pas — et celui poussé le
+  premier sur `master` était le plus pauvre des trois. Une des branches abandonnées portait en
+  plus un nettoyage de secrets qui manquait à `master`. `git ls-remote --heads origin` puis
+  `git log origin/master..origin/<branche>` avant de commencer, pas après avoir écrit.
+- **Ne crois aucun document sans le vérifier contre le code.** Ce `server/README.md` annonçait
+  **au présent** un secret de signature codé en dur, dans un fichier supprimé depuis ; décrivait
+  un front applicatif qui n'existe plus ; et son arborescence avait onze fichiers de retard avec
+  deux chemins faux. Une documentation qui décrit un dépôt disparu envoie son lecteur chasser des
+  fantômes — et, dans le cas du secret, une vulnérabilité déjà retirée.
+- **N'écris jamais le marqueur de saut de CI dans un message de commit, même pour l'expliquer.**
+  GitHub lit le corps du message, pas seulement le titre. Un commit qui citait ce marqueur entre
+  guillemets pour documenter son usage a sauté son propre déclenchement. Les messages de ce dépôt
+  sont longs et explicatifs : le risque n'est pas théorique.
+- **Une session distante peut ajouter des commits, guère plus.** Le proxy refuse la résolution de
+  dépendances npm (403 sur le registre) et le retrait de références (403 sur toute suppression de
+  branche ou de tag). Retirer une dépendance fonctionne — l'opération est hors réseau ; l'ajouter
+  ou la monter, non. Le contournement qui marche est un workflow temporaire en `workflow_dispatch`
+  qui fait l'opération sur un runner, puis se supprime. Deux l'ont été au cours d'une même
+  session ; aucun n'a laissé de trace dans `.github/workflows/`.
+
 ## Documents publiés
 
 `docs/vitrine-partenaire.html` — présentation partenaire, pour un décideur non technique :
